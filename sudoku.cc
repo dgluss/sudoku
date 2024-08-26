@@ -1,4 +1,6 @@
 #include <algorithm>
+#include <assert.h>
+#include <bitset>
 #include <cstdio>
 #include <fstream>
 #include <iostream>
@@ -12,7 +14,7 @@
 #include <string>
 #include <vector>
 
-// TODO: forcingchain (which seems pretty hard)
+// TODO: ywing, forcingchain (which seems pretty hard)
 //  rectangle elimination, simple pairs (uses conjugate pairs)
 // https://www.thonky.com/sudoku
 
@@ -22,18 +24,18 @@ const constexpr int SIZE = 9;
 
 enum { FULL, CELLONLY } hintmode = FULL;
 FILE* logfile = fopen("foo", "w"); // nullptr;
-void maybe_log(const char* format, const char* cellname, ...) {
+void maybe_log(const char* format, const char* cell, ...) {
   va_list argptr;
-  va_start(argptr, cellname);
+  va_start(argptr, cell);
   if (logfile) {
     if (hintmode == CELLONLY && format[0] != '#') {
-      if (*cellname) {
-        fprintf(logfile, "%s\n", cellname);
+      if (*cell) {
+        fprintf(logfile, "%s\n", cell);
       }
     } else {
       vfprintf(logfile, format, argptr);
       va_end(argptr);
-      va_start(argptr, cellname);
+      va_start(argptr, cell);
     }
   }
   vprintf(format, argptr);
@@ -48,13 +50,62 @@ int mask_from_set(const set<int>& the_set) {
   return m;
 }
 
+class Ordered_Min_Two_Masks {
+  // We want to try algorithms involving all possible masks in the order
+  // of how many ones in the mask. There are only about 512 of these, so
+  // store them after generating the list once. Each mask has at least 2
+  // ones (in binary) and at most 8 ones.
+public:
+  Ordered_Min_Two_Masks() {
+    // the mask has to have at least two cells, but fewer than 9
+    int loc = 0;
+    for (int n = 3; n < MAXMASK - 1; ++n) {
+      if (one_count(n) < 2)
+        continue;
+      masks[loc++] = n;
+    }
+    n_masks = loc;
+    while (loc < MAXMASK) masks[loc++] = MAXMASK - 1;  // that has maximal count
+    sort(begin(masks), end(masks), compareByOneCount);
+  }
+  const int* get_masks() {
+    return masks;
+  }
+  int num_masks() {
+    return n_masks;
+  }
+  static int one_count(int num) {
+    int count = 0;
+    for (int t = num; t; t >>= 1) {
+      if (t & 1) ++count;
+    }
+    return count;
+  }
+private:
+  static constexpr int MAXMASK = 1 << SIZE; // bigger than any valid mask
+  int n_masks;
+  int masks[MAXMASK];
+  static bool compareByOneCount(int a, int b) {
+    if (one_count(a) < one_count(b)) return true;
+    if (one_count(a) > one_count(b)) return false;
+    return a < b;
+  }
+};
+
 // A cell may have a value. The value_set is the set of currently
 // known possible values.
-struct cell_t {
+struct cell {
   int value;
   set<int> value_set;
   int mask;
 
+  void set_value(int v) {
+    value = v;
+    value_set.clear();
+    value_set.insert(v);
+    set_mask();
+  }
+  
   void set_mask() {
     mask = mask_from_set(value_set);
   }
@@ -73,7 +124,7 @@ struct iboard {
       }
     }
   }
-  explicit iboard(const char* n) {
+  iboard(const char* n) {
     name = n;
     for (int i = 0; i < SIZE; ++i) {
       for (int j = 0; j < SIZE; ++j) {
@@ -84,9 +135,9 @@ struct iboard {
   const char* name;
   int data[SIZE][SIZE];
 };
+typedef struct cell board_t[SIZE][SIZE];
 
-typedef cell_t board_t[SIZE][SIZE];
-
+const char* title;
 const char* searchstr = "";
 iboard boards[] = {
   {"337",
@@ -493,81 +544,270 @@ iboard boards[] = {
        {0,3,4, 0,0,6, 0,0,0},
        {0,0,6, 5,0,0, 3,0,0},
      }
-  },{"68p fiendish",
+  },{"158 ***",
      (int[SIZE][SIZE])
      {
-       {0,0,9, 0,0,7, 6,0,0},
-       {0,0,3, 8,6,0, 2,5,0},
-       {6,0,2, 1,5,0, 0,0,4},
+       {4,0,8, 5,0,1, 6,0,0},
+       {0,0,3, 6,0,0, 0,1,4},
+       {6,1,0, 0,0,4, 9,8,5},
 
-       {0,9,8, 0,1,5, 7,0,0},
-       {0,6,1, 7,0,8, 4,9,5},
-       {0,0,5, 0,9,0, 1,8,0},
+       {0,7,9, 0,0,0, 0,0,0},
+       {3,0,5, 0,1,0, 4,0,2},
+       {0,0,4, 0,0,0, 0,9,0},
 
-       {1,0,7, 3,4,2, 0,6,0},
-       {0,3,4, 9,0,6, 0,0,0},
-       {9,0,6, 5,0,1, 3,4,0},
+       {9,0,6, 1,0,0, 0,4,0},
+       {8,4,0, 0,0,6, 1,0,9},
+       {0,0,1, 0,0,2, 8,0,6},
      }
-  },{"203 fiendish",
+  },{"349 ****",
      (int[SIZE][SIZE])
      {
-       {0,0,6, 0,0,0, 0,9,0},
-       {4,0,1, 2,0,0, 5,3,7},
-       {5,0,0, 0,0,1, 0,0,8},
+       {0,0,0, 0,0,2, 0,9,8},
+       {2,0,0, 1,0,0, 6,4,7},
+       {0,0,4, 0,7,0, 0,1,0},
 
-       {7,0,0, 0,8,0, 0,1,0},
-       {6,1,0, 0,0,0, 0,5,2},
-       {0,5,0, 1,4,0, 0,7,6},
+       {0,0,0, 0,1,0, 7,3,0},
+       {5,0,0, 7,2,6, 9,8,4},
+       {0,7,0, 0,8,0, 0,0,1},
 
-       {1,6,7, 3,0,0, 0,0,5},
-       {0,4,3, 0,0,7, 0,0,0},
-       {0,2,5, 0,1,0, 7,0,3},
+       {0,9,0, 0,0,0, 1,0,3},
+       {1,0,6, 0,0,7, 8,0,9},
+       {3,8,0, 5,9,1, 4,0,0},
      }
-  },{"57a fiendish",
+  },{"531 *****",
      (int[SIZE][SIZE])
      {
-       {0,0,7, 0,0,3, 0,0,0},
-       {0,4,6, 2,0,0, 0,1,3},
-       {0,8,0, 0,5,0, 6,0,9},
+       {9,0,3, 4,1,8, 0,7,0},
+       {4,8,0, 5,0,2, 0,1,3},
+       {0,0,1, 0,0,0, 0,0,4},
 
-       {0,3,0, 1,8,0, 4,0,0},
-       {0,1,0, 7,0,6, 0,0,0},
-       {8,0,0, 0,0,0, 9,0,0},
+       {0,1,0, 0,0,6, 3,0,0},
+       {0,0,0, 0,0,0, 0,0,0},
+       {0,0,5, 7,0,0, 0,6,0},
 
-       {7,6,0, 0,0,0, 0,0,0},
-       {0,0,3, 0,0,0, 0,0,0},
-       {0,0,0, 0,0,5, 0,0,0},
+       {3,0,8, 0,0,0, 4,0,0},
+       {0,4,0, 2,0,3, 0,5,8},
+       {0,9,2, 8,0,0, 7,3,6},
      }
-  },{"57b fiendish",
+  },{"sfchron",
      (int[SIZE][SIZE])
      {
-       {0,0,0, 7,0,0, 0,0,0},
-       {0,0,0, 0,0,0, 3,0,0},
-       {0,0,0, 0,0,0, 0,4,2},
+       {0,0,0, 0,9,0, 0,0,4},
+       {0,0,8, 0,4,0, 0,0,1},
+       {0,4,0, 6,5,0, 0,2,0},
 
-       {0,0,4, 0,0,0, 0,0,5},
-       {0,0,0, 8,0,9, 0,6,0},
-       {0,0,3, 0,2,1, 0,9,0},
+       {1,0,0, 0,7,0, 0,0,6},
+       {0,6,0, 5,2,3, 0,1,0},
+       {2,0,0, 0,6,0, 0,0,7},
 
-       {3,0,8, 0,4,0, 0,1,0},
-       {5,2,0, 0,0,8, 6,3,0},
-       {0,0,0, 1,0,0, 7,0,0},
+       {0,3,0, 0,8,4, 6,7,0},
+       {4,0,0, 0,1,0, 3,0,0},
+       {6,0,0, 0,3,0, 0,0,0},
      }
-  },{"66 fiendish",
+  },{"351 ****",
      (int[SIZE][SIZE])
      {
-       {0,0,0, 0,6,0, 4,0,0},
-       {0,0,0, 1,0,7, 0,3,0},
-       {9,0,0, 0,0,0, 2,0,6},
+       {0,0,4, 0,2,9, 0,0,0},
+       {7,1,0, 0,0,5, 4,0,0},
+       {0,0,0, 0,4,0, 0,5,6},
 
-       {0,7,0, 0,1,2, 0,0,0},
+       {3,4,7, 0,0,2, 8,1,9},
+       {0,0,0, 9,8,4, 0,0,0},
+       {9,2,8, 0,7,0, 6,4,5},
+
+       {4,7,0, 0,0,6, 0,0,0},
+       {0,0,6, 4,0,8, 0,7,3},
+       {0,0,0, 2,1,7, 0,6,4},
+     }
+  },{"161 ***",
+     (int[SIZE][SIZE])
+     {
+       {8,0,0, 1,3,2, 0,0,9},
+       {3,0,0, 7,5,8, 0,0,6},
+       {5,1,0, 6,4,9, 0,8,3},
+
+       {0,0,0, 5,8,3, 0,2,4},
+       {0,0,0, 4,9,0, 0,0,0},
+       {4,8,0, 2,6,0, 0,0,0},
+
+       {9,5,1, 8,7,6, 4,3,2},
+       {6,0,0, 9,2,4, 0,0,5},
+       {2,0,0, 3,1,5, 0,0,0},
+     }
+  },{"352 ****",
+     (int[SIZE][SIZE])
+     {
+       {0,3,2, 5,0,0, 0,0,9},
+       {0,0,0, 0,6,0, 0,3,0},
+       {0,0,7, 3,0,8, 0,0,0},
+
+       {2,7,8, 0,5,3, 0,4,0},
+       {0,0,0, 8,0,0, 0,0,0},
+       {0,9,0, 0,4,0, 3,2,8},
+
+       {0,0,0, 1,0,6, 5,0,4},
+       {0,4,0, 0,8,0, 0,0,0},
+       {7,0,0, 4,0,5, 6,8,0},
+     }
+  },{"353 ****",
+     (int[SIZE][SIZE])
+     {
+       {2,0,0, 0,0,8, 0,4,1},
+       {0,0,1, 0,2,0, 0,0,0},
+       {0,0,9, 0,0,0, 3,8,2},
+
+       {0,4,5, 2,0,7, 0,0,3},
+       {0,6,0, 0,3,0, 0,2,0},
+       {3,2,0, 4,0,0, 9,0,0},
+
+       {7,1,4, 0,0,2, 6,0,8},
+       {0,0,0, 0,1,0, 2,0,0},
+       {5,9,2, 8,0,0, 0,0,0},
+     }
+  },{"533 *****",
+     (int[SIZE][SIZE])
+     {
        {3,0,0, 0,0,0, 0,0,9},
-       {0,0,0, 8,4,0, 0,6,0},
+       {1,0,0, 0,0,0, 0,2,0},
+       {9,5,7, 4,2,1, 8,3,0},
 
-       {4,0,1, 0,0,0, 0,0,8},
-       {0,5,0, 3,0,4, 0,0,0},
-       {0,0,6, 0,5,0, 0,0,0},
+       {4,0,0, 6,0,0, 0,0,5},
+       {6,7,3, 1,0,5, 2,0,8},
+       {5,0,0, 0,0,7, 0,0,0},
+
+       {8,9,4, 5,1,3, 6,7,2},
+       {7,6,0, 0,0,0, 0,0,1},
+       {2,0,0, 0,0,0, 0,0,0},
      }
+  },{"28 **",
+     (int[SIZE][SIZE])
+     {
+       {9,1,8, 0,6,4, 2,0,0},
+       {3,2,0, 9,8,1, 4,0,6},
+       {0,6,4, 2,0,3, 1,8,9},
+
+       {4,3,2, 1,9,6, 8,0,0},
+       {6,8,9, 0,2,0, 3,0,0},
+       {0,0,1, 4,3,8, 6,9,2},
+
+       {1,9,0, 8,0,2, 5,6,0},
+       {2,0,0, 6,0,0, 9,0,8},
+       {8,0,6, 3,0,9, 7,2,0},
+     }
+  },{"357 ****",
+     (int[SIZE][SIZE])
+     {
+       {8,0,3, 2,0,6, 4,0,7},
+       {1,7,0, 8,9,0, 0,0,6},
+       {0,6,0, 7,0,0, 0,0,0},
+
+       {6,4,7, 9,3,1, 5,0,0},
+       {0,0,9, 6,2,8, 7,0,0},
+       {2,8,1, 0,7,0, 9,6,3},
+
+       {0,0,0, 0,0,7, 6,3,0},
+       {7,0,0, 3,6,2, 0,0,9},
+       {0,0,6, 1,0,9, 0,7,5},
+     }
+  },{"534 ****",
+     (int[SIZE][SIZE])
+     {
+       {0,4,0, 6,0,0, 1,0,0},
+       {0,1,6, 3,0,0, 8,7,0},
+       {0,3,9, 0,1,7, 6,4,0},
+
+       {0,0,5, 0,2,0, 9,0,0},
+       {0,0,3, 0,8,0, 7,0,0},
+       {0,0,0, 0,6,0, 2,0,0},
+
+       {6,5,0, 9,3,0, 4,0,0},
+       {3,9,4, 0,7,1, 5,6,0},
+       {0,0,8, 0,0,6, 3,9,0},
+     }
+  },{"358 ****",
+     (int[SIZE][SIZE])
+     {
+       {0,0,0, 0,7,1, 0,9,0},
+       {8,4,0, 0,0,0, 1,7,5},
+       {7,9,1, 5,4,8, 3,2,6},
+
+       {0,3,9, 0,0,0, 7,6,0},
+       {2,0,0, 0,0,0, 5,0,1},
+       {0,0,8, 0,0,0, 9,3,0},
+
+       {9,2,0, 4,0,0, 0,0,3},
+       {3,0,4, 0,0,0, 0,5,9},
+       {0,8,0, 9,3,0, 0,0,7},
+     }
+  },{"535 *****",
+     (int[SIZE][SIZE])
+     {
+       {0,2,1, 3,7,5, 0,9,0},
+       {0,4,0, 9,2,6, 0,1,7},
+       {0,0,7, 1,4,8, 0,0,0},
+
+       {1,0,0, 0,0,4, 0,6,0},
+       {0,8,2, 0,6,1, 4,3,0},
+       {0,6,4, 2,0,0, 0,0,1},
+
+       {0,0,0, 4,5,0, 1,0,0},
+       {4,1,0, 0,0,3, 0,5,0},
+       {0,5,0, 6,1,2, 0,4,0},
+     }
+  },{"359 ****",
+     (int[SIZE][SIZE])
+     {
+       {0,8,3, 0,0,0, 7,5,2},
+       {2,7,6, 0,3,5, 0,0,8},
+       {0,5,4, 8,7,2, 0,3,0},
+
+       {3,0,1, 7,0,8, 5,0,0},
+       {5,9,7, 0,2,0, 0,8,3},
+       {6,0,8, 5,0,3, 1,0,0},
+
+       {8,6,9, 3,5,0, 2,7,0},
+       {7,1,2, 6,8,0, 3,0,5},
+       {4,3,5, 2,0,7, 8,0,0},
+     }
+  },{"337t",
+   (int[SIZE][SIZE])
+   {{7,0,8, 2,0,0, 1,0,0},
+    {1,0,2, 0,0,7, 6,8,0},
+    {0,0,0, 0,0,0, 0,0,9},
+
+    {0,0,0, 4,0,8, 0,6,0},
+    {8,0,0, 0,0,0, 0,0,3},
+    {0,5,0, 9,0,6, 0,0,0},
+               
+    {4,0,0, 0,0,0, 0,0,0},
+    {0,8,9, 7,0,0, 3,0,6},
+    {0,0,7, 0,0,5, 2,0,1}}
+  },{"536 *****",
+   (int[SIZE][SIZE])
+   {{0,0,4, 1,0,8, 9,0,6},
+    {0,0,9, 4,0,0, 8,0,0},
+    {8,6,0, 0,7,0, 0,0,4},
+
+    {0,0,6, 0,3,0, 0,0,7},
+    {0,8,2, 7,0,0, 5,9,3},
+    {3,0,7, 0,9,0, 6,0,0},
+               
+    {7,0,0, 0,1,0, 0,6,8},
+    {0,0,8, 6,0,2, 7,0,0},
+    {6,0,0, 3,8,7, 4,0,0}}
+  },{"164 ***",
+   (int[SIZE][SIZE])
+   {{6,5,1, 2,0,0, 8,7,0},
+    {8,7,9, 1,6,0, 0,0,4},
+    {4,3,2, 0,7,0, 1,6,0},
+
+    {1,0,4, 0,9,0, 7,8,0},
+    {5,9,3, 0,0,0, 4,1,6},
+    {7,0,8, 0,1,0, 0,0,0},
+               
+    {0,8,6, 0,5,0, 3,4,1},
+    {3,1,7, 0,0,6, 0,0,8},
+    {0,4,5, 0,0,1, 6,0,7}}
   }};
               
 //iboard boards[] = {
@@ -673,49 +913,15 @@ iboard boards[] = {
   // },
 //};  
 
-struct Board {
-  board_t board;
-  set<int>& value_set(int r, int c) {
-    return board[r][c].value_set;
-  }
-  iboard altcolor = iboard("color");
-  const char* title;
-  int maxmoves = -1;
-  bool draw2links = false;
-  
-  void Setup(const iboard& from_board) {
-    for (int i = 0 ; i < SIZE; ++i) {
-      for (int j = 0 ; j < SIZE; ++j) {
-        board[i][j].value = from_board.data[i][j];
-      }
-    }
-    title = from_board.name;
-  }    
-
-  void Setup(const Board& from_board) {
-    for (int i = 0 ; i < SIZE; ++i) {
-      for (int j = 0 ; j < SIZE; ++j) {
-        board[i][j].value = from_board.board[i][j].value;
-      }
-    }
-    title = from_board.title;
-  }    
-
-  explicit Board(const iboard& from_board) {
-    Setup(from_board);
-  }
-
-  explicit Board(const Board& from_board) {
-    Setup(from_board);
-  }
-};
-
-void printboard(Board& context, const char* filename);
+board_t board;  // this is the global board that I shouldn't have.
+iboard altcolor("color");
+int maxmoves = -1;
+void printboard(const char*);
 bool putps = true;
 bool interior_possibilities = false;
 
 // max # possibilities to put in the postscript
-const int NPOSS = 8;
+const int NPOSS = 5;
 
 // sets of r,c in a row, col, or block
 struct Collection {
@@ -733,17 +939,17 @@ struct Collection {
     bool operator==(const ccell& other) const {
       return r == other.r && c == other.c;
     }
-    set<int>& value_set(Board& context) const {
-      return context.board[r][c].value_set;
+    set<int>& value_set() const {
+      return board[r][c].value_set;
     }
-    void set_mask(Board& context) const {
-      context.board[r][c].set_mask();
+    void set_mask() const {
+      board[r][c].set_mask();
     }
-    int mask(const Board& context) const {
-      return context.board[r][c].mask;
+    int mask() const {
+      return board[r][c].mask;
     }
-    bool can_have(Board& context, int i) const {
-      return value_set(context).find(i) != value_set(context).end();
+    bool can_have(int i) const {
+      return value_set().find(i) != value_set().end();
     }
     // The two ccells share a coordinate (same row or column) or are
     // in the same block.
@@ -753,7 +959,7 @@ struct Collection {
     }
     std::string loc() const {
       std::ostringstream s;
-      s << "(" << r+1 << "," << c+1 << ")";
+      s << "{" << r+1 << "," << c+1 << "}";
       return s.str();
     }
   };
@@ -775,8 +981,8 @@ struct Collection {
   // some ccells line up
   int link_count(const Collection& other) const {
     int ct = 0;
-    for (auto& my : cells) {
-      for (auto& they : other.cells) {
+    for (const auto& my : cells) {
+      for (const auto& they : other.cells) {
         if (my.haslinkto(they, false)) {
           ++ct;
         }
@@ -806,17 +1012,44 @@ struct Collection {
     }
     a_b->name = string("(") + name + "\\" + other.name + ")";
   }
+
+  // true if only cells with at least min_list_size were selected
+  bool Mask(int mask, Collection* result) {
+    result->cells.clear();
+    for (const auto cell : cells) {
+      if (mask & 1) {
+        result->cells.insert(cell);
+      }
+      mask >>= 1;
+    }
+    return true;
+  }
+
+  void GetValues(set<int>* output) const {
+    for (const auto cell : cells) {
+      const auto v = cell.value_set();
+      output->insert(v.begin(), v.end());
+    }
+  }
+  
   std::string locs() const {
     std::ostringstream s;
-    for (auto c : cells) {
+    bool notfirst = false;
+    for (const auto c : cells) {
+      if (notfirst)
+        s << ",";
       s << c.loc();
+      notfirst = true;
     }
     return s.str();
   }
 };
 
+Collection debug_collection;
+Ordered_Min_Two_Masks* ordered_min_two_masks;
+
 struct GetCollection {
-  enum Type {ROW, COL, BLOCK} type;
+  enum Type {ROW, COL, BLOCK, ARBITRARY} type;
   GetCollection(Type type) {
     this->type = type;
   }
@@ -882,27 +1115,50 @@ struct GetCollection {
       col->name = "block ";
       col->name += "UCB"[r/3];
       col->name += "LCR"[c/3];
-      int n = 0;
       for (int i = 0; i < 3; ++i) {
         e.r = 3 * (r/3) + i;
         for (int j = 0; j < 3; ++j) {
           e.c = 3 * (c/3) + j;
           col->cells.insert(e);
-          ++n;
         }
       }
+      break;
+    case ARBITRARY:
+      col->name = "arbitrary";
+      e.r = r;
+      e.c = c;
+      col->cells.insert(e);
       break;
     }
   }
 };
-    
+
+
+struct Mirror {
+  bool is_mirrored;
+  Mirror(bool m) {
+    is_mirrored = m;
+  }
+  int getrow(Collection::ccell c) {
+    if (is_mirrored) return c.c;
+    return c.r;
+  }
+  int getcol(Collection::ccell c) {
+    if (is_mirrored) return c.r;
+    return c.c;
+  }
+};
+
 typedef void Setfcn(int, int, Collection*);
 typedef void SetSfcn(int, Collection*);
 
-void print_collection(const Collection& c) {
-  printf("collection %s: ", c.name.c_str());
+void print_collection(const Collection& c, const char* comment = 0) {
+  if (!comment) {
+    comment = "collection ";
+  }
+  printf("%s%s: ", comment, c.name.c_str());
   for (const Collection::ccell& cell : c.cells) {
-    printf("%s", cell.loc().c_str());
+    printf("%s,", cell.loc().c_str());
   }
   printf("\n");
 }
@@ -960,12 +1216,12 @@ void blockcollection(int a, int b, Collection* c) {
 }
 
 // This collects all of the cells on the board that have exactly two choices.
-void twochoicecollection(Board& context, Collection* c) {
+void twochoicecollection(Collection* c) {
   c->name = "twochoices";
   Collection::ccell e;
   for (int r = 0; r < SIZE; ++r) {
     for (int col = 0;col < SIZE; ++col) {
-      if (context.board[r][col].value_set.size() == 2) {
+      if (board[r][col].value_set.size() == 2) {
         e.r = r;
         e.c = col;
         c->cells.insert(e);
@@ -978,19 +1234,16 @@ void blockScollection(int block, Collection* c) {
   blockcollection(3*(block%3), 3*(block/3), c);
 }
 
-void collection_to_set(const Board& context,
-                       const Collection& c,
-                       set<int>* s) {
+void collection_to_set(const Collection& c, set<int>* s) {
   for (const auto& ccell : c.cells) {
-    if (context.board[ccell.r][ccell.c].value > 0)
-      s->insert(context.board[ccell.r][ccell.c].value);
+    if (board[ccell.r][ccell.c].value > 0)
+      s->insert(board[ccell.r][ccell.c].value);
   }
 }
 
-void collection_lists_to_set(const Board& context,
-                             const Collection& c, set<int>* s) {
+void collection_lists_to_set(const Collection& c, set<int>* s) {
   for (const auto& ccell : c.cells) {
-    const set<int>& value_set = context.board[ccell.r][ccell.c].value_set;
+    set<int>& value_set = board[ccell.r][ccell.c].value_set;
     s->insert(value_set.begin(), value_set.end());
   }
 }
@@ -1014,38 +1267,35 @@ void allsubsets(const set<int>& value_set, vector<set<int>>* subsets) {
 }
 
 // apply a function to a row and column to produce a set.
-void arbset(const Board& context,
-            int row, int column,
-            Setfcn fn, set<int>* s) {
+void arbset(int row, int column, Setfcn fn, set<int>* s) {
   Collection c;
   fn(row, column, &c);
-  collection_to_set(context, c, s);
+  collection_to_set(c, s);
 }
 
-void rowset(const Board& context, int n, set<int>* s) {
-  arbset(context, n, 0, rowcollection, s);
+void rowset(int n, set<int>* s) {
+  arbset(n, 0, rowcollection, s);
 }
 
-void colset(const Board& context, int n, set<int>* s) {
-  arbset(context, 0, n, colcollection, s);
+void colset(int n, set<int>* s) {
+  arbset(0, n, colcollection, s);
 }
 
 // a in {0-8}, b in {0-8}
-void blockset(const Board& context, int a, int b, set<int>* s) {
-  arbset(context, a, b, blockcollection, s);
+void blockset(int a, int b, set<int>* s) {
+  arbset(a, b, blockcollection, s);
 }
 
 // How many entries would work in this cell?
-int possibilities(const Board& context, int r, int c, set<int>* result) {
+int possibilities(int r, int c, set<int>* result) {
   set<int> s;
-  auto v = context.board[r][c].value;
-  if (v != 0) {
-    result->insert(v);
+  if (board[r][c].value != 0) {
+    result->insert(board[r][c].value);
     return 1;
   }
-  arbset(context, r, c, rowcollection, &s);
-  arbset(context, r, c, colcollection, &s);
-  arbset(context, r, c, blockcollection, &s);
+  arbset(r, c, rowcollection, &s);
+  arbset(r, c, colcollection, &s);
+  arbset(r, c, blockcollection, &s);
   int cand;
   int n = 0;
   for (cand=1;cand<10;++cand) {
@@ -1058,12 +1308,27 @@ int possibilities(const Board& context, int r, int c, set<int>* result) {
   return n;
 }
 
-void set_lists(Board& context) {
+void set_lists() {
   for (int r = 0;r < SIZE;++r) {
     for (int c = 0;c < SIZE; ++c) {
-      context.board[r][c].value_set.clear();
-      possibilities(context, r, c, &context.board[r][c].value_set);
-      context.board[r][c].set_mask();
+      board[r][c].value_set.clear();
+      possibilities(r, c, &board[r][c].value_set);
+      board[r][c].set_mask();
+    }
+  }
+}
+
+void reduce_lists() {
+  for (int r = 0;r < SIZE;++r) {
+    for (int c = 0;c < SIZE; ++c) {
+      set<int> list;
+      possibilities(r, c, &list);
+      set<int> intersection;
+      auto was = board[r][c].value_set;
+      std::set_intersection(list.begin(), list.end(),
+                            was.begin(), was.end(),
+                            std::inserter(intersection, intersection.begin()));
+      board[r][c].value_set = intersection;
     }
   }
 }
@@ -1074,10 +1339,10 @@ void find_sets(int r, int c, Setfcn fcn) {
 }
 
 // remove any cell in col that can't have val in it.
-void remove_from_collection_not(const Board& context, int val, Collection* col) {
+void remove_from_collection_not(int val, Collection* col) {
   set<Collection::ccell, Collection::ccell::Compare> badcells;
   for (auto& cell : col->cells) {
-    if (!context.board[cell.r][cell.c].can_have(val)) {
+    if (!board[cell.r][cell.c].can_have(val)) {
       badcells.insert(cell);  // You can't do col->cells.erase(cell) because
       // then you crash the loop. So save the cells to delete for later.
     }
@@ -1090,9 +1355,9 @@ void remove_from_collection_not(const Board& context, int val, Collection* col) 
 // There's only one possible candidate for this cell
 // because all other candidates are in the same row, column,
 // or block.
-int eliminate(const Board& context, int r, int c) {
+int eliminate(int r, int c) {
   set<int> s;
-  if (possibilities(context, r, c, &s) == 1) {
+  if (possibilities(r, c, &s) == 1) {
     auto first = s.begin();
     return *first;
   }
@@ -1103,51 +1368,53 @@ int eliminate(const Board& context, int r, int c) {
 }
 
 // The candidate is in this row..
-bool rowhas(const Board& context, int cand, int row) {
+bool rowhas(int cand, int row) {
   for (int col = 0; col < SIZE; ++col) {
-    if (context.board[row][col].value == cand) return true;
+    if (board[row][col].value == cand) return true;
   }
   return false;
 }
 
 // The candidate is in this col.
-bool colhas(const Board& context, int cand, int col) {
+bool colhas(int cand, int col) {
   for (int row = 0; row < SIZE; ++row) {
-    if (context.board[row][col].value == cand) return true;
+    if (board[row][col].value == cand) return true;
   }
   return false;
 }
 
-bool alldone(const Board& context) {
+bool alldone() {
   for (int r = 0; r < SIZE; ++r) {
     for (int c = 0;c < SIZE; ++c) {
-      if (!context.board[r][c].value)
+      if (!board[r][c].value)
         return false;
     }
   }
   return true;
 }
 
+set<string> done_progress;
+
 // Side effect: sets the value for cells that have list size 1
 // after removing val.
-bool mayberemove(Board& context, const string& name,
+bool mayberemove(const string& name, const string& stepname,
                  const Collection::ccell& thecell, int val) {
-  if (!thecell.can_have(context, val)) {
+  if (!thecell.can_have(val)) {
     return false;
   }
-  if (context.maxmoves == 0) return false;
-  else if (context.maxmoves > 0) --context.maxmoves;
+  if (maxmoves == 0) return false;
+  else if (maxmoves > 0) --maxmoves;
   maybe_log("erase %d in %s by %s\n", thecell.loc().c_str(),
             val, thecell.loc().c_str(), name.c_str());
-  thecell.value_set(context).erase(val);
-  if (thecell.value_set(context).size() == 1) {
-    context.board[thecell.r][thecell.c].value = *thecell.value_set(context).begin();
+  thecell.value_set().erase(val);
+  if (thecell.value_set().size() == 1) {
+    board[thecell.r][thecell.c].set_value(*thecell.value_set().begin());
     maybe_log("found %d in %s because it's all that's left\n",
               thecell.loc().c_str(),
-              context.board[thecell.r][thecell.c].value,
+              board[thecell.r][thecell.c].value,
               thecell.loc().c_str());
   }
-  thecell.set_mask(context);
+  thecell.set_mask();
   return true;
 }
 
@@ -1155,75 +1422,73 @@ bool mayberemove(Board& context, const string& name,
 // then no other cells in the collection can have those values.
 // This is actually true of subsets too, so 123, 12, 12 must work:
 // the latter two are 1 and 2 so the first one must be 3, thus all other
-// lists couldn't have 1 or 2 or 3.
+// lists couldn't have 1 or 2 or 3. Also, 12, 23, 13, which currently
+// doesn't work.
 // Side effect: sets the value for cells that now have list size 1.
-bool trynakedcells(Board& context, GetCollection& g) {
+bool trynakedcells(GetCollection& g) {
   bool retval = false;
   Collection col;
   for (int r = 0; r < SIZE; ++r) {
     g.New(r, &col);
-    // print_collection(col);
-    for (const auto& firstcell : col.cells) {
-      const std::set<int> firstlist = firstcell.value_set(context);
-      std::set<Collection::ccell, Collection::ccell::Compare> mycells;
-      for (auto& subcell : col.cells) {
-        if (std::includes(firstlist.begin(), firstlist.end(),
-                          subcell.value_set(context).begin(),
-                          subcell.value_set(context).end())) {
-          mycells.insert(subcell);
-        }
+    // print_collection(col, "col: ");
+    for (int i = 0; i < ordered_min_two_masks->num_masks();++i) {
+      Collection mycol;
+      if (!col.Mask(ordered_min_two_masks->get_masks()[i], &mycol)) {
+        continue;
       }
-      if (mycells.size() == firstlist.size()) {
-        if (firstlist.size() == 1)
-          context.board[firstcell.r][firstcell.c].value = *firstlist.begin();
-        for (auto& thecell : col.cells) {
-          if (mycells.find(thecell) == mycells.end()) {
-            for (int i : firstcell.value_set(context)) {
-              std::ostringstream s;
-              s << "nakedcells from " << firstcell.loc() << ":";
-              for (auto c : mycells) {
-                s << c.loc();
-              }
-              retval |=
-                mayberemove(context, s.str().c_str(), thecell, i);
-              if (retval) return retval;
-            }
-          }
+      // print_collection(mycol, "mycol: ");
+      Collection othercells;
+      col.Subtract(mycol, &othercells);
+      // print_collection(othercells, "othercells: ");
+      std::ostringstream s;
+      s << "nakedcells from: " << mycol.locs();
+      set<int> values;
+      mycol.GetValues(&values);
+      if (values.size() > mycol.cells.size())
+        continue;
+      for (auto& mycell : othercells.cells) {
+        for (auto candidate : values) {
+          retval |= mayberemove(s.str().c_str(), "nakedcells",
+                                       mycell, candidate);
         }
-      }
+      } 
+      // if (did_something) {
+      //   reduce_lists();
+      // }
     }
     col.clear();
+    if (retval)
+      return retval;
   }
   return retval;
 }
 
-bool tryallnakedcells(Board& context) {
+bool tryonenakedcells() {
   GetCollection gr(GetCollection::ROW);
-  bool r = trynakedcells(context, gr);
+  if (trynakedcells(gr))
+    return true;
   GetCollection gc(GetCollection::COL);
-  r |= trynakedcells(context, gc);
+  if (trynakedcells(gc))
+    return true;
   GetCollection gb(GetCollection::BLOCK);
-  r |= trynakedcells(context, gb);
-  printf("tryallnakedcells returns %d\n", r);
-  return r;
+  if (trynakedcells(gb))
+    return true;
+  return false;
 }
 
 // If there are, e.g. 2 cells that are the only cells that can have
 // 2 different values, then there can't be any other values in those cells.
-bool tryhiddencells(Board& context, GetCollection& g) {
+bool tryhiddencells(GetCollection& g) {
   bool retval = false;
   Collection col;
   // A set of values must be a subset of one of the 9 cells, so we
   // don't need to try all subsets of 9 values (512 things to try).
-  // No, this was wrong: e.g. {1,2}, {1,3}, {2,3}. Instead we should look
-  // at all subsets of the union of values from size>1 sets.
   for (int r = 0; r < SIZE; ++r) {
     g.New(r, &col);
     set<int> triedmasks;
-    set<int> interesting_values;
     for (const auto& cell1 : col.cells) {
       vector<set<int>> subsets;
-      allsubsets(cell1.value_set(context), &subsets);
+      allsubsets(cell1.value_set(), &subsets);
       for (const auto& s : subsets) {
         if (s.size() < 2) {
           continue;
@@ -1237,19 +1502,18 @@ bool tryhiddencells(Board& context, GetCollection& g) {
         for (const auto& cell : col.cells) {
           // If the mask of this cell includes some of our mask,
           // then count it.
-          if ((cell.mask(context) & mask) != 0)
+          if ((cell.mask() & mask) != 0)
             ++cell_ct;
         }
         if (cell_ct == s.size()) {
           // Now, the question is if we can trim any of these cell's lists.
           for (const auto& cell : col.cells) {
-            if ((cell.mask(context) & mask) == 0)
+            if ((cell.mask() & mask) == 0)
               continue;
             // If the mask of this cell extends beyond our mask,
             // then remove those parts.
-            if ((cell.mask(context) & !mask) != 0) {
-              set_lists(context);
-              printboard(context, "foobar.ps");
+            if ((cell.mask() & !mask) != 0) {
+              set_lists();
               printf("AHA! Hiddencells!\n");
               exit(1);
             }
@@ -1261,20 +1525,21 @@ bool tryhiddencells(Board& context, GetCollection& g) {
   return retval;
 }
 
-bool tryallhiddencells(Board& context) {
+bool tryonehiddencells() {
   GetCollection gr(GetCollection::ROW);
-  bool r = tryhiddencells(context, gr);
+  if (tryhiddencells(gr))
+    return true;
   GetCollection gc(GetCollection::COL);
-  r |= tryhiddencells(context, gc);
+  if (tryhiddencells(gc))
+    return true;
   GetCollection gb(GetCollection::BLOCK);
-  r |= tryhiddencells(context, gb);
-  printf("tryallhiddencells returns %d\n", r);
-  return r;
+  if (tryhiddencells(gb))
+    return true;
+  return false;
 }
 
 // The rowfn could be a col also.
-bool trypointing(Board& context,
-                 int iter,
+bool trypointing(int iter,
                  const char* name,
                  GetCollection& blockfn,
                  GetCollection& rowfn) {
@@ -1294,11 +1559,11 @@ bool trypointing(Board& context,
       if (rest_of_block == block) continue;
       row.Subtract(block, &rest_of_row);
       set<int> values;
-      collection_lists_to_set(context, rest_of_block, &values);
+      collection_lists_to_set(rest_of_block, &values);
       for (int candidate = 1; candidate < 10; ++candidate) {
         if (values.find(candidate) == values.end()) {
           for (const auto& c : rest_of_row.cells) {
-            retval |= mayberemove(context, blockname.c_str(), c, candidate);
+            retval |= mayberemove(blockname.c_str(), "pointing", c, candidate);
           }
         }
       }
@@ -1307,25 +1572,26 @@ bool trypointing(Board& context,
   return retval;
 }
 
-bool tryallpointing(Board& context) {
+bool tryonepointing() {
   static int iter = 0;
-  // printf("tryallpointing %d\n", ++iter);
   GetCollection row(GetCollection::ROW);
   GetCollection col(GetCollection::COL);
   GetCollection block(GetCollection::BLOCK);
-  bool r = trypointing(context, iter, "row pointing", block, row);
-  r |= trypointing(context, iter, "col pointing", block, col);
-  r |= trypointing(context, iter, "row block pointing", row, block);
-  r |= trypointing(context, iter, "col block pointing", col, block);
-  printf("tryallpointing returns %d\n", r);
-  return r;
+  if (trypointing(iter, "row pointing", block, row))
+    return true;
+  if (trypointing(iter, "col pointing", block, col))
+    return true;
+  if (trypointing(iter, "row block pointing", row, block))
+    return true;
+  if (trypointing(iter, "col block pointing", col, block))
+    return true;
+  return false;
 }
 
 // of course columns and rows can be interchanged.
-bool tryxwing(Board& context,
-              const char* name, SetSfcn rowfn, SetSfcn colfn) {
+bool tryxwing(const char* name, SetSfcn rowfn, SetSfcn colfn, Mirror m) {
   Collection leftcol, rightcol, toprow, botrow;
-  bool retval = false;
+  printboard("foobar.ps");
   for (int cl = 0; cl < SIZE; ++cl) {
     leftcol.clear();
     colfn(cl, &leftcol);
@@ -1346,25 +1612,31 @@ bool tryxwing(Board& context,
                 << rightcol.name << ")";
           for (int candidate = 1; candidate < 10; ++candidate) {
 	    for (auto cell : toprow.cells) {
-	      if (cell.c != cl && cell.c != cr) {
-		if (context.board[cell.r][cell.c].can_have(candidate))
+              auto c = m.getcol(cell);
+	      if (c != cl && c != cr) {
+		if (board[cell.r][cell.c].can_have(candidate))
 		  goto next_candidate;
 	      }
 	    }
 	    for (auto cell : botrow.cells) {
-	      if (cell.c != cl && cell.c != cr) {
-		if (context.board[cell.r][cell.c].can_have(candidate))
+              auto c = m.getcol(cell);
+	      if (c != cl && c != cr) {
+		if (board[cell.r][cell.c].can_have(candidate))
 		  goto next_candidate;
 	      }
 	    }
 	    for (auto cell : leftcol.cells) {
-	      if (cell.r != rt && cell.r != rb) {
-                retval |= mayberemove(context, descr.str(), cell, candidate);
+              auto r = m.getrow(cell);
+	      if (r != rt && r != rb) {
+                if (mayberemove(descr.str(), "xwing", cell, candidate))
+                  return true;
 	      }
 	    }
 	    for (auto cell : rightcol.cells) {
-	      if (cell.r != rt && cell.r != rb) {
-                retval |= mayberemove(context, descr.str(), cell, candidate);
+              auto r = m.getrow(cell);
+	      if (r != rt && r != rb) {
+                if (mayberemove(descr.str(), "xwing", cell, candidate))
+                  return true;
 	      }
 	    }
 	  next_candidate:;
@@ -1373,26 +1645,27 @@ bool tryxwing(Board& context,
       }
     }
   }
-  return retval;
+  return false;
 }
 
-bool tryallxwing(Board& context) {
-  bool r = tryxwing(context, "xwing cols", colScollection, rowScollection);
-  r |= tryxwing(context, "xwing rows", rowScollection, colScollection);
-  printf("tryallxwing returns %d\n", r);
-  return r;
+bool tryonexwing() {
+  if (tryxwing("xwing cols", colScollection, rowScollection, Mirror(true)))
+    return true;
+  if (tryxwing("xwing rows", rowScollection, colScollection, Mirror(false)))
+    return true;
+  return false;
 }
 
 // All cells in "twocells" have length-2 lists and so are suitable for
 // the pivot and pincer cells.
-bool tryywing(Board& context, const Collection& twocells) {
+bool tryywing(const Collection& twocells) {
   bool retval = false;
   for (auto& pivot : twocells.cells) {
-    const auto& vpivot = pivot.value_set(context);
+    const auto& vpivot = pivot.value_set();
     for (auto& pincer1 : twocells.cells) {
       if (pincer1 == pivot) continue;
       if (!pivot.haslinkto(pincer1, true)) continue;
-      const auto& vpincer1 = pincer1.value_set(context);
+      const auto& vpincer1 = pincer1.value_set();
       set<int> intersect1;
       set_intersection(vpivot.begin(), vpivot.end(),
                        vpincer1.begin(), vpincer1.end(),
@@ -1402,7 +1675,7 @@ bool tryywing(Board& context, const Collection& twocells) {
         if (pincer2 == pivot) continue;
         if (pincer2 == pincer1) continue;
         if (!pivot.haslinkto(pincer2, true)) continue;
-        const auto& vpincer2 = pincer2.value_set(context);
+        const auto& vpincer2 = pincer2.value_set();
         set<int> intersect2;
         set_intersection(vpivot.begin(), vpivot.end(),
                        vpincer2.begin(), vpincer2.end(),
@@ -1433,7 +1706,7 @@ bool tryywing(Board& context, const Collection& twocells) {
                 << ", pincer1=" << pincer1.r+1 << "," << pincer1.c+1
                 << ", pincer2=" << pincer2.r+1 << "," << pincer2.c+1
                 << ")";
-              if (mayberemove(context, s.str(), ccell, bad)) {
+              if (mayberemove(s.str(), "ywing", ccell, bad)) {
                 retval = true;
               }
             }
@@ -1446,16 +1719,13 @@ bool tryywing(Board& context, const Collection& twocells) {
   return retval;
 }
 
-bool tryallywing(Board& context) {
+bool tryoneywing() {
   Collection twocells;
-  twochoicecollection(context, &twocells);
-  bool rv = tryywing(context, twocells);
-  printf("tryallywing returns %d\n", rv);
-  return rv;
+  twochoicecollection(&twocells);
+  return tryywing(twocells);
 }
 
-bool tryswordfish(Board& context, 
-                  const char* name,
+bool tryswordfish(const char* name,
                   GetCollection& rowf,
                   GetCollection& colf,
                   int candidate) {
@@ -1465,7 +1735,7 @@ bool tryswordfish(Board& context,
   for (int i = 0; i < SIZE; ++i) {
     Collection row;
     rowf.New(i, &row);
-    remove_from_collection_not(context, candidate, &row);
+    remove_from_collection_not(candidate, &row);
     if (row.cells.size() == 2) {
       rows.insert(pair<int, Collection>(current_row++, row));
     }
@@ -1516,7 +1786,7 @@ bool tryswordfish(Board& context,
           }
         }
         for (auto& e : column.cells) {
-          retval |= mayberemove(context, s.str().c_str(), e, candidate);
+          retval |= mayberemove(s.str().c_str(), "swordfish", e, candidate);
         }
       }
     }
@@ -1524,17 +1794,19 @@ bool tryswordfish(Board& context,
   return retval;
 }
 
-bool tryallswordfish(Board& context) {
+bool tryoneswordfish() {
   bool r = false;
   GetCollection gr(GetCollection::ROW);
   GetCollection gc(GetCollection::COL);
   for (int candidate = 0; candidate < SIZE; ++candidate) {
-    r |= tryswordfish(context, "swordfish by row",
-                      gr, gc, candidate);
-    r |= tryswordfish(context, "swordfish by col",
-                      gc, gr, candidate);
+    if (tryswordfish("swordfish by row",
+                     gr, gc, candidate))
+      return true;
+    if (tryswordfish("swordfish by col",
+                     gc, gr, candidate))
+      return true;
   }
-  return r;
+  return false;
 }
 
 bool tryallcoloring(int candidate) {
@@ -1548,12 +1820,12 @@ bool tryallcoloring(int candidate) {
 bool tryforcingchain() {return false;}
 
 // The candidate is in this block. a and b are in {0-8}
-bool blockhas(const Board& context, int cand, int a, int b) {
+bool blockhas(int cand, int a, int b) {
   a /= 3;
   b /= 3;
   for (int row = 0; row < 3; ++row) {
     for (int col = 0; col < 3; ++col) {
-      if (context.board[3*a + row][3*b + col].value == cand) return true;
+      if (board[3*a + row][3*b + col].value == cand) return true;
     }
   }
   return false;
@@ -1631,14 +1903,14 @@ heavyspace 0 gt
 } if
 )";
 
-void printboard(Board& context, const char* filename) {
+void printboard(const char* filename) {
   for (int r = 0;r < SIZE;++r) {
     if (!(r%3))
       fputs("-------------------------------\n", stdout);
     for (int c = 0;c < SIZE; ++c) {
       if (!(c%3)) fputs("|", stdout);
-      if (context.board[r][c].value)
-	printf(" %d ", context.board[r][c].value);
+      if (board[r][c].value)
+	printf(" %d ", board[r][c].value);
       else
 	printf("   ");
     }
@@ -1657,26 +1929,25 @@ void printboard(Board& context, const char* filename) {
             1 + now->tm_mon,
             now->tm_mday);
     fprintf(f, "1 0 (%s) smallstring\n", filename);
-    if (context.title[0]) {
-      fprintf(f, "8 -1 (%s) bigstring\n", context.title);
+    if (title[0]) {
+      fprintf(f, "8 -1 (%s) bigstring\n", title);
     }
     for (int r = 0;r < SIZE;++r) {
       for (int c = 0;c < SIZE; ++c) {
-	if (context.board[r][c].value) {
+	if (board[r][c].value) {
 	  fprintf(f, "gsave\n");
-	  if (context.altcolor.data[r][c])
+	  if (altcolor.data[r][c])
 	    fprintf(f, "0 1 0 setrgbcolor\n");
-	  fprintf(f, "%d %d (%d) bigstring\n", c+1, r+1,
-                  context.board[r][c].value);
+	  fprintf(f, "%d %d (%d) bigstring\n", c+1, r+1, board[r][c].value);
 	  fprintf(f, "grestore\n");
 	} else {
           if (interior_possibilities) {
-            for (auto d : context.board[r][c].value_set) {
+            for (auto d : board[r][c].value_set) {
               fprintf(f, "%d %d %d digit\n",
                       c+1, r+1, d);
             }            
           } else {
-            const auto &mylist = context.board[r][c].value_set;
+            const auto &mylist = board[r][c].value_set;
             if (mylist.size() <= NPOSS) {
               char str[10];
               char* q = str;
@@ -1697,23 +1968,23 @@ void printboard(Board& context, const char* filename) {
 }
 
 // This candidate can't be in any other position of this row, col, or block.
-string exclude(Board& context, int cand, int r, int c) {
+string exclude(int cand, int r, int c) {
   // the candidate must be OK in this position.
-  if (rowhas(context, cand, r)) {
+  if (rowhas(cand, r)) {
     return "";
   }
-  if (colhas(context, cand, c)) {
+  if (colhas(cand, c)) {
     return "";
   }
-  if (blockhas(context, cand, r, c)){
+  if (blockhas(cand, r, c)){
     return "";
   }
   // the candidate is excluded from any other position of this col.
   bool hit = true;
   for (int row = 0;row < SIZE; ++row) {
     if (row == r) continue;
-    if (context.board[row][c].value) continue;
-    if (!(rowhas(context, cand, row) || blockhas(context, cand,row,c))) {
+    if (board[row][c].value) continue;
+    if (!(rowhas(cand, row) || blockhas(cand,row,c))) {
       hit = false;
       break;
     }
@@ -1723,8 +1994,8 @@ string exclude(Board& context, int cand, int r, int c) {
   hit = true;
   for (int col = 0;col < SIZE; ++col) {
     if (col == c) continue;
-    if (context.board[r][col].value) continue;
-    if (!(colhas(context, cand, col) || blockhas(context, cand,r,col))) {
+    if (board[r][col].value) continue;
+    if (!(colhas(cand, col) || blockhas(cand,r,col))) {
       hit = false;
       break;
     }
@@ -1736,8 +2007,8 @@ string exclude(Board& context, int cand, int r, int c) {
       int row = blockrow + 3*(r/3);
       int col = blockcol + 3*(c/3);
       if (row == r && col == c) continue;
-      if (context.board[row][col].value) continue;
-      if (!(rowhas(context, cand, row) || colhas(context, cand, col))) {
+      if (board[row][col].value) continue;
+      if (!(rowhas(cand, row) || colhas(cand, col))) {
 	return "";
       }
     }
@@ -1753,27 +2024,29 @@ void msg(int cand, int r, int c, const string& by, const string& what) {
   //  printboard(0);
 }
 
-int makebasicmoves(Board& context) {
+int makebasicmoves(int* pMaxmoves) {
   int mademoves = 0;
   bool found = true;
-  while (found && (context.maxmoves < 0 || --context.maxmoves >= 0)) {
+  while (found && (*pMaxmoves < 0 || --*pMaxmoves >= 0)) {
     found = false;
     for (int r = 0;r < SIZE;++r) {
       for (int c = 0;c < SIZE; ++c) {
-	if (context.board[r][c].value > 0) continue;
-	if (int e = eliminate(context, r, c)) {
+	if (board[r][c].value > 0) continue;
+	if (int e = eliminate(r, c)) {
 	  if (e < 0) {
 	    maybe_log("Problem impossible (%d,%d)\n", "", r+1, c+1);
             maybe_log("%d moves\n", "", mademoves);
-            set_lists(context);
-            printboard(context, "sudokuboardfailure.ps");
+            set_lists();
+            printboard("sudokuboardfailure.ps");
 	    exit(1);
 	  } else {
-	    context.board[r][c].value = e;
+	    board[r][c].set_value(e);
 	    msg(e, r, c, "elimination", "");
 	  }
 	  found = true;
           ++mademoves;
+	  if (*pMaxmoves > 0)
+	    --*pMaxmoves;
 	  goto endloop;
 	}
       }
@@ -1781,14 +2054,16 @@ int makebasicmoves(Board& context) {
     if (found) continue;
     for (int r = 0;r < SIZE;++r) {
       for (int c = 0;c < SIZE; ++c) {
-	if (context.board[r][c].value > 0) continue;
+	if (board[r][c].value > 0) continue;
 	for (int e = 1;e <= 9;++e) {
-	  string what = exclude(context, e, r, c);
+	  string what = exclude(e, r, c);
 	  if (!what.empty()) {
-	    context.board[r][c].value = e;
+	    board[r][c].set_value(e);
 	    msg(e, r, c, "exclusion", what);
 	    found = true;
             ++mademoves;
+	    if (*pMaxmoves > 0)
+	      --*pMaxmoves;
 	    goto endloop;
 	  }
 	}
@@ -1796,8 +2071,7 @@ int makebasicmoves(Board& context) {
     }
   endloop:;
   }
-  printf("---------------------------------- Finished makebasicmoves.\n");
-  printf("%d moves\n", mademoves);
+  printf("%d basic moves\n", mademoves);
   return mademoves;
 }
 
@@ -1816,7 +2090,7 @@ struct Progress {
   {"final", 7},
 };
 
-void print_progress(Board& context, const char* name) {
+void print_progress(const char* name) {
   Progress* p = nullptr;
   for (auto& q : prog) {
     if (!strcmp(name, q.name)) {
@@ -1830,86 +2104,103 @@ void print_progress(Board& context, const char* name) {
   if (p->done) return;
   p->done = true;
   string oname = "sudokuboard";
-  printboard(context, (oname + to_string(p->level) + name + ".ps").c_str());
+  printboard((oname + to_string(p->level) + name + ".ps").c_str());
 }
 
-void initboarddata(Board& context, const iboard& b) {
+void initboarddata(const iboard& b) {
   for (int i = 0 ; i < SIZE; ++i) {
     for (int j = 0 ; j < SIZE; ++j) {
-      context.board[i][j].value = b.data[i][j];
-      context.altcolor.data[i][j] = 0;
+      board[i][j].set_value(b.data[i][j]);
+      altcolor.data[i][j] = 0;
     }
   }
-  context.title = b.name;
+  title = b.name;
 }
 
-bool solve_board(Board& context) {
-  maybe_log("%s\n", "", context.title);
-  set_lists(context);
-  printboard(context, 0);
-  makebasicmoves(context);
-  set_lists(context);
-  printboard(context, "sudokuboard0basic.ps");
+bool solve_board() {
+  maybe_log("%s\n", "", title);
+  set_lists();
+  printboard(0);
+  makebasicmoves(&maxmoves);
+  set_lists();
+  printboard("sudokuboard0basic.ps");
   bool changed = true;
-  while (changed && !alldone(context)) {
+  while (changed && !alldone()) {
     changed = false;
-    if (makebasicmoves(context) > 0) {
+    if (makebasicmoves(&maxmoves) > 0) {
       changed = true;
       continue;
     }
-    changed = tryallpointing(context);
+    changed = tryonepointing();
     if (changed) {
-      print_progress(context, "pointing");
+      print_progress("pointing");
       continue;
     }
-    changed = tryallnakedcells(context);
+    changed = tryonenakedcells();
     if (changed) {
-      print_progress(context, "nakedcells");
+      print_progress("nakedcells");
       continue;
     }
-    changed = tryallhiddencells(context);
+    changed = tryonehiddencells();
     if (changed) {
-      print_progress(context, "hiddencells");
+      print_progress("hiddencells");
       continue;
     }
-    changed = tryallxwing(context);
+    changed = tryonexwing();
     if (changed) {
-      print_progress(context, "xwing");
+      print_progress("xwing");
       continue;
     }
-    changed = tryallswordfish(context);
+    changed = tryoneywing();
     if (changed) {
-      print_progress(context, "swordfish");
+      print_progress("ywing");
       continue;
     }
-    changed = tryallywing(context);
+    changed = tryoneswordfish();
     if (changed) {
-      print_progress(context, "ywing");
+      print_progress("swordfish");
       continue;
     }
   }
-  return alldone(context);
+  return alldone();
 }
 
 int
 main(int nargs, const char* args[]) {
-  auto& selected_iboard = boards[sizeof(boards)/sizeof(iboard) - 1];
-  Board mycontext(selected_iboard);
+  auto& myboard = boards[sizeof(boards)/sizeof(iboard) - 1];
+  initboarddata(myboard);
+  {
+    GetCollection g(GetCollection::ARBITRARY);;
+    debug_collection.clear();
+    for (auto p : (int[][2]) {
+        {1,5},{1,6}
+      } ) {
+      g.Add(p[0] - 1, p[1] - 1, &debug_collection);
+    }
+    // cout << "debug_collection: ";
+    // print_collection(debug_collection);
+    ordered_min_two_masks = new(Ordered_Min_Two_Masks);
+    // for (int i = 0; i < ordered_min_two_masks->num_masks(); ++i) {
+    //   auto n = ordered_min_two_masks->list_of_masks()[i];
+    //   std::bitset<10> bin(n);
+    //   cout << "mask: " << n << " " <<  bin << endl;
+    // }
+  }
   while(nargs > 1) {
     if (args[1][1] == 'b') {
       // blank board print
       for (int i = 0 ; i < SIZE; ++i) {
 	for (int j = 0 ; j < SIZE; ++j) {
-	  mycontext.board[i][j].value = 0;
+	  board[i][j].value = 0;
 	}
       }
-      printboard(mycontext, "sudokuboard.ps");
+      printboard("sudokuboard.ps");
       return 0;
     }
     if (args[1][1] == 'p') {
       // Just print the starting board.
-      set_lists(mycontext);
-      printboard(mycontext, "sudokuboard.ps");
+      set_lists();
+      printboard("sudokuboard.ps");
       return 0;
     }
     if (args[1][1] == 'm') {
@@ -1920,7 +2211,7 @@ main(int nargs, const char* args[]) {
       }
       nargs--;
       args++;
-      mycontext.maxmoves = atoi(args[1]);
+      maxmoves = atoi(args[1]);
     }
     if (args[1][1] == 't') {
       if (nargs == 2) {
@@ -1929,7 +2220,7 @@ main(int nargs, const char* args[]) {
       }
       nargs--;
       args++;
-      mycontext.title = args[1];
+      title = args[1];
     }
     if (args[1][1] == 's') {
       if (nargs == 2) {
@@ -1948,6 +2239,19 @@ main(int nargs, const char* args[]) {
       // put possibilities inside the square instead of at the top.
       interior_possibilities = true;
     }
+    if (args[1][1] == 'a') {
+      // try to solve all of the puzzles
+      putps = false;
+      for (auto& myboard : boards) {
+        initboarddata(myboard);
+        if (solve_board())
+          printf("%s WORKED.\n", title);
+        else
+          printf("%s FAILED.\n", title);
+        printboard(0);
+      }
+      exit(0);
+    }
     nargs--;
     args++;
   }
@@ -1956,21 +2260,12 @@ main(int nargs, const char* args[]) {
     regcomp(&regbuf, searchstr, 0);
     for (auto& b : boards) {
       if (regexec(&regbuf, b.name, 0, 0, 0) == 0) {
-        mycontext.Setup(b);
+        myboard = b;
+        initboarddata(myboard);
         break;
       }
     }
   }
-  // putps = false;
-  // for (auto& myboard : boards) {
-  //   mycontext.Setup(myboard);
-  //   if (solve_board(mycontext))
-  //     printf("%s worked.\n", mycontext.title);
-  //   else
-  //     printf("FAILED: %s\n", mycontext.title);
-  //   //    printboard(context, board);
-  // }
-  // exit(0);
-  solve_board(mycontext);
-  printboard(mycontext, "sudokuboard.ps");
+  solve_board();
+  printboard("sudokuboard.ps");
 }
