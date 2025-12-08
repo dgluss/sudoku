@@ -24,6 +24,7 @@ const constexpr int SIZE = 9;
 
 enum { FULL, CELLONLY } hintmode = FULL;
 FILE* logfile = fopen("foo", "w"); // nullptr;
+// The second argument must be a C string
 void maybe_log(const char* format, const char* cell, ...) {
   va_list argptr;
   va_start(argptr, cell);
@@ -52,7 +53,7 @@ int mask_from_set(const set<int>& the_set) {
 
 class Ordered_Min_Two_Masks {
   // We want to try algorithms involving all possible masks in the order
-  // of how many ones in the mask. There are only about 512 of these, so
+  // of how many ones are in the mask. There are only about 512 of these, so
   // store them after generating the list once. Each mask has at least 2
   // ones (in binary) and at most 8 ones.
 public:
@@ -95,15 +96,29 @@ private:
 // A cell may have a value. The value_set is the set of currently
 // known possible values.
 struct cell {
-  int value;
   set<int> value_set;
   int mask;
 
-  void set_value(int v) {
-    value = v;
-    value_set.clear();
-    value_set.insert(v);
+  cell() {
+    // The default value_set is all possibilities
+    for (int v = 1; v <= SIZE; ++v) {
+      value_set.insert(v);
+    }
     set_mask();
+  }
+
+  void set_value(int v) {
+    if (v > 0) {
+      value_set.clear();
+      value_set.insert(v);
+    }
+    set_mask();
+  }
+
+  int get_value() const {
+    if (value_set.size() != 1)
+      return 0;
+    return *value_set.begin();
   }
   
   void set_mask() {
@@ -1048,6 +1063,430 @@ iboard boards[] = {
        {4,6,8, 0,2,0, 3,5,1},
        {1,5,9, 0,0,0, 6,2,7},
      }
+  },{"63UL fiendish",
+     (int[SIZE][SIZE])
+     {
+       {0,6,0, 0,0,0, 0,0,0},
+       {0,3,1, 4,0,5, 0,0,0},
+       {0,0,0, 0,6,0, 3,5,0},
+
+       {8,0,2, 0,5,0, 0,0,7},
+       {6,0,0, 0,4,8, 0,0,0},
+       {0,4,0, 6,0,0, 9,0,5},
+
+       {9,0,0, 0,0,0, 0,0,0},
+       {5,0,0, 0,0,0, 0,0,0},
+       {0,0,0, 0,0,3, 0,0,0},
+     }
+  },{"63LR fiendish",
+     (int[SIZE][SIZE])
+     {
+       {0,0,0, 6,0,0, 0,0,0},
+       {0,0,0, 0,0,0, 0,0,9},
+       {0,0,0, 0,0,0, 0,0,6},
+
+       {3,0,2, 0,0,4, 0,9,0},
+       {0,0,0, 8,6,0, 0,0,3},
+       {7,0,0, 0,9,0, 1,0,8},
+
+       {0,3,5, 0,7,0, 9,6,1},
+       {0,0,0, 4,0,1, 7,8,5},
+       {0,0,0, 0,0,0, 0,4,0},
+     }
+  },{"64UL moderate",
+     (int[SIZE][SIZE])
+     {
+       {8,0,6, 2,7,3, 9,0,0},
+       {5,0,3, 4,9,8, 0,0,0},
+       {7,0,9, 1,6,5, 0,0,0},
+
+       {2,0,4, 9,0,1, 0,0,3},
+       {9,7,5, 6,3,4, 2,1,8},
+       {3,0,1, 7,0,2, 0,9,4},
+
+       {4,5,7, 8,1,6, 3,2,9},
+       {0,9,2, 3,4,7, 0,0,0},
+       {0,3,8, 5,2,9, 0,0,0},
+     }
+  },{"64LR moderate",
+     (int[SIZE][SIZE])
+     {
+       {3,2,9, 0,6,7, 0,5,8},
+       {0,0,0, 0,2,0, 0,3,0},
+       {0,0,0, 8,0,0, 0,9,0},
+
+       {2,7,0, 0,0,1, 3,6,0},
+       {9,0,0, 0,0,6, 0,0,1},
+       {6,0,0, 2,0,0, 0,0,0},
+
+       {0,0,0, 6,0,4, 9,0,7},
+       {0,0,0, 0,7,8, 5,0,3},
+       {0,0,0, 0,0,2, 6,0,4},
+     }
+  },{"540 *****",
+   (int[SIZE][SIZE])
+   {{0,9,0, 0,0,0, 8,0,0},
+    {0,1,0, 0,0,9, 6,7,4},
+    {0,6,7, 0,4,0, 0,0,3},
+
+    {7,4,0, 0,0,2, 0,5,6},
+    {0,3,6, 0,5,0, 7,0,0},
+    {1,5,0, 6,0,0, 0,8,0},
+               
+    {6,0,0, 0,9,0, 1,0,0},
+    {9,7,3, 2,0,0, 0,6,0},
+    {0,0,1, 0,0,0, 0,3,0}}
+  },{"541 *****",
+   (int[SIZE][SIZE])
+   {{0,0,0, 1,0,7, 0,0,4},
+    {4,0,0, 0,0,2, 0,3,1},
+    {5,0,1, 4,3,6, 0,8,9},
+
+    {8,9,7, 0,0,3, 1,0,2},
+    {1,4,0, 7,2,8, 0,9,6},
+    {2,0,6, 0,0,1, 0,7,0},
+               
+    {0,8,0, 2,1,5, 9,0,7},
+    {9,1,0, 0,7,4, 0,0,3},
+    {7,0,0, 3,0,9, 0,1,0}}
+  },{"542 *****",
+   (int[SIZE][SIZE])
+   {{0,0,9, 0,2,0, 8,0,0},
+    {7,1,0, 5,8,0, 9,2,0},
+    {2,8,5, 0,9,6, 3,0,0},
+
+    {5,0,0, 0,0,1, 2,9,0},
+    {9,7,0, 0,0,0, 1,4,0},
+    {0,0,1, 9,0,0, 6,0,3},
+               
+    {1,0,7, 8,0,0, 5,0,9},
+    {0,9,0, 0,7,5, 4,6,1},
+    {0,5,4, 0,1,9, 7,0,0}}
+  },{"543 *****",
+   (int[SIZE][SIZE])
+   {{4,1,0, 0,0,3, 9,0,7},
+    {5,0,7, 9,0,0, 0,4,0},
+    {8,9,0, 7,0,4, 5,0,0},
+
+    {7,8,1, 3,9,6, 4,0,0},
+    {2,5,4, 8,7,1, 6,9,3},
+    {0,0,9, 4,2,5, 7,0,0},
+               
+    {0,4,8, 0,0,7, 0,0,9},
+    {0,7,0, 0,4,9, 8,0,0},
+    {9,0,5, 1,0,0, 0,7,4}}
+  },{"185 ***",
+   (int[SIZE][SIZE])
+   {{0,7,0, 1,0,0, 8,3,0},
+    {0,0,0, 0,7,0, 0,2,0},
+    {9,0,0, 0,3,0, 0,0,5},
+
+    {8,0,0, 5,0,0, 0,0,4},
+    {7,0,4, 9,8,6, 0,0,3},
+    {5,0,0, 7,4,3, 0,0,8},
+               
+    {1,0,0, 0,6,0, 3,9,7},
+    {3,6,7, 8,9,0, 0,0,2},
+    {2,4,9, 3,0,7, 0,8,0}}
+  },{"300 ***",
+   (int[SIZE][SIZE])
+   {{2,7,8, 5,9,0, 0,1,4},
+    {0,0,4, 1,2,8, 0,9,0},
+    {1,0,0, 4,7,0, 2,0,8},
+
+    {6,1,7, 3,8,2, 0,4,0},
+    {9,8,2, 6,4,5, 1,7,3},
+    {4,3,5, 9,1,7, 0,0,2},
+               
+    {8,0,1, 2,6,4, 0,0,0},
+    {0,2,0, 0,3,1, 4,0,0},
+    {0,4,0, 0,5,9, 0,2,1}}
+  },{"377 ****",
+   (int[SIZE][SIZE])
+   {{0,7,5, 0,9,4, 0,0,0},
+    {0,0,0, 0,0,0, 0,0,2},
+    {9,0,0, 2,8,0, 0,7,0},
+
+    {0,3,4, 0,0,0, 0,0,0},
+    {0,0,0, 5,0,6, 0,0,0},
+    {0,0,0, 0,0,0, 2,1,0},
+               
+    {0,6,0, 0,4,5, 0,0,7},
+    {1,0,0, 0,0,0, 0,0,0},
+    {0,0,0, 7,2,0, 9,3,0}}
+  },{"377w****",
+   (int[SIZE][SIZE])
+   {{2,7,5, 6,9,4, 3,8,1},
+    {4,8,3, 1,5,7, 6,9,2},
+    {9,6,1, 2,8,3, 0,7,0},
+
+    {0,3,4, 9,1,2, 0,6,0},
+    {0,1,2, 5,3,6, 0,4,9},
+    {6,9,5, 4,7,8, 2,1,3},
+               
+    {3,6,9, 8,4,5, 1,2,7},
+    {1,2,7, 3,6,9, 0,5,0},
+    {5,4,8, 7,2,0, 9,3,6}}
+  },{"544 *****",
+   (int[SIZE][SIZE])
+   {{0,0,0, 5,0,6, 2,0,8},
+    {5,0,2, 0,8,9, 0,6,3},
+    {0,0,0, 4,2,3, 0,0,0},
+
+    {7,1,0, 0,9,0, 0,0,5},
+    {0,0,5, 0,6,0, 8,0,0},
+    {9,0,0, 0,5,0, 0,3,1},
+               
+    {0,0,0, 6,4,8, 0,0,0},
+    {0,9,0, 0,0,0, 3,0,4},
+    {4,0,1, 9,3,0, 0,0,6}}
+  },{"380 ****",
+   (int[SIZE][SIZE])
+   {{6,0,0, 0,8,4, 1,7,2},
+    {7,1,4, 2,6,3, 9,5,8},
+    {0,0,0, 0,0,0, 6,4,3},
+
+    {4,5,2, 0,3,6, 0,1,9},
+    {1,7,0, 0,0,0, 3,6,4},
+    {3,0,6, 4,1,0, 0,2,5},
+               
+    {8,0,7, 0,4,0, 0,0,0},
+    {0,4,0, 0,0,8, 0,0,0},
+    {0,6,1, 3,9,0, 4,8,7}}
+  },{"382 ****",
+   (int[SIZE][SIZE])
+   {{9,0,1, 2,0,0, 4,6,0},
+    {0,0,3, 8,4,6, 1,0,0},
+    {6,4,0, 1,0,0, 0,0,3},
+
+    {4,0,0, 7,0,1, 0,0,0},
+    {0,6,0, 4,8,0, 0,2,0},
+    {0,0,0, 5,0,0, 0,0,4},
+               
+    {5,3,7, 6,0,8, 0,4,0},
+    {0,9,6, 3,0,4, 7,0,0},
+    {0,0,4, 9,0,7, 3,0,6}}
+  },{"26 **",
+   (int[SIZE][SIZE])
+   {{0,0,7, 0,0,6, 0,4,5},
+    {0,6,0, 0,4,0, 0,7,8},
+    {0,8,4, 0,2,0, 0,6,3},
+
+    {0,0,0, 0,6,5, 0,0,9},
+    {0,3,9, 0,0,0, 0,5,6},
+    {6,0,5, 9,0,0, 0,0,7},
+               
+    {1,9,3, 6,5,4, 7,8,2},
+    {4,7,6, 0,3,0, 5,9,1},
+    {2,5,8, 1,0,0, 6,3,4}}
+  },{"383 ****",
+   (int[SIZE][SIZE])
+   {{0,0,4, 0,8,0, 1,9,0},
+    {0,7,0, 5,0,0, 4,0,3},
+    {0,1,0, 4,0,0, 0,6,0},
+
+    {0,0,0, 3,5,0, 0,0,0},
+    {7,0,0, 0,0,0, 0,0,1},
+    {0,0,0, 0,2,6, 0,0,0},
+               
+    {0,5,0, 0,0,3, 0,2,0},
+    {6,0,7, 0,0,5, 0,1,0},
+    {0,3,9, 0,7,0, 6,0,0}}
+  },{"545 *****",
+   (int[SIZE][SIZE])
+   {{0,3,6, 0,2,8, 0,7,0},
+    {7,0,5, 0,4,0, 8,0,3},
+    {0,0,8, 0,7,0, 0,0,0},
+
+    {0,7,1, 0,0,0, 3,8,4},
+    {8,0,0, 7,3,0, 1,9,6},
+    {9,6,3, 8,1,4, 2,5,7},
+               
+    {0,8,7, 0,0,0, 9,0,0},
+    {6,0,0, 0,9,0, 7,0,8},
+    {3,0,9, 1,8,7, 6,4,0}}
+  },{"386 ****",
+   (int[SIZE][SIZE])
+   {{5,0,0, 2,0,0, 1,3,0},
+    {0,0,2, 1,8,0, 5,0,0},
+    {9,0,1, 0,0,6, 8,7,2},
+
+    {0,5,4, 9,0,0, 2,0,8},
+    {2,0,9, 0,0,0, 3,0,0},
+    {3,0,0, 0,2,1, 9,5,0},
+               
+    {0,2,0, 7,0,0, 4,0,0},
+    {0,0,0, 0,9,0, 7,2,0},
+    {7,9,3, 0,0,2, 6,0,5}}
+  },{"546 *****",
+   (int[SIZE][SIZE])
+   {{0,6,0, 4,0,7, 5,9,0},
+    {8,9,4, 0,0,0, 7,0,0},
+    {0,0,3, 0,9,0, 0,0,0},
+
+    {4,3,9, 2,7,8, 1,6,5},
+    {0,8,5, 0,0,0, 0,0,0},
+    {0,0,0, 0,5,4, 0,8,9},
+               
+    {0,0,6, 0,1,0, 8,0,0},
+    {0,0,7, 0,0,0, 6,5,1},
+    {0,0,8, 7,0,6, 9,2,0}}
+  },{"388 ****",
+   (int[SIZE][SIZE])
+   {{1,7,9, 0,0,2, 3,4,0},
+    {2,3,5, 0,0,9, 1,0,0},
+    {4,8,6, 0,0,7, 2,5,9},
+
+    {5,1,4, 2,9,0, 8,0,0},
+    {7,6,2, 0,0,0, 5,9,0},
+    {3,9,8, 0,7,5, 4,0,0},
+               
+    {0,4,3, 7,0,0, 9,1,0},
+    {9,2,7, 0,0,0, 6,3,0},
+    {0,5,1, 9,0,0, 7,0,4}}
+  },{"389 ****",
+   (int[SIZE][SIZE])
+   {{1,0,4, 0,5,8, 7,0,3},
+    {0,8,7, 0,0,0, 6,5,0},
+    {0,3,5, 0,0,7, 8,0,1},
+
+    {3,1,9, 7,0,0, 5,6,8},
+    {7,5,8, 9,1,6, 3,0,0},
+    {4,2,6, 5,8,3, 1,7,9},
+               
+    {5,0,0, 8,0,0, 4,1,7},
+    {0,4,0, 0,7,0, 0,8,5},
+    {8,7,1, 0,0,5, 0,3,6}}
+  },{"547 *****",
+   (int[SIZE][SIZE])
+   {{2,0,0, 0,0,0, 0,0,9},
+    {0,1,6, 5,2,9, 0,0,0},
+    {0,0,0, 3,4,0, 0,0,6},
+
+    {0,0,4, 2,8,3, 0,6,5},
+    {6,3,0, 4,0,0, 0,8,0},
+    {5,8,0, 0,0,6, 4,0,0},
+               
+    {0,0,0, 0,3,2, 0,0,0},
+    {0,0,0, 8,1,4, 6,7,0},
+    {8,0,0, 0,0,0, 0,0,1}}
+  },{"391 ****",
+   (int[SIZE][SIZE])
+   {{8,0,4, 0,2,1, 3,5,7},
+    {0,0,0, 0,0,7, 2,0,8},
+    {0,0,0, 0,8,0, 0,4,1},
+
+    {0,0,0, 0,0,2, 0,1,0},
+    {2,0,6, 0,0,0, 4,0,9},
+    {0,5,0, 3,0,0, 0,0,2},
+               
+    {0,8,0, 0,5,0, 0,0,0},
+    {6,0,9, 8,0,0, 0,0,0},
+    {5,4,1, 2,0,0, 0,0,6}}
+  },{"198 ***",
+   (int[SIZE][SIZE])
+   {{2,4,6, 8,5,3, 0,0,0},
+    {0,1,8, 0,0,4, 0,3,0},
+    {9,0,3, 0,1,0, 0,0,4},
+
+    {0,0,7, 0,0,1, 0,4,2},
+    {0,0,0, 0,0,0, 0,0,0},
+    {8,3,0, 7,0,0, 5,0,0},
+               
+    {0,0,0, 0,0,0, 0,0,3},
+    {3,9,0, 4,0,0, 1,6,0},
+    {0,0,0, 1,3,5, 0,7,9}}
+  },{"199 ***",
+   (int[SIZE][SIZE])
+   {{2,6,0, 3,0,0, 4,1,0},
+    {0,0,0, 9,1,0, 0,2,0},
+    {0,0,0, 0,4,0, 8,0,0},
+
+    {0,2,6, 0,0,0, 1,3,0},
+    {8,0,7, 0,6,3, 9,0,2},
+    {0,5,0, 0,0,0, 6,0,0},
+               
+    {0,0,4, 0,3,0, 2,0,1},
+    {6,3,0, 4,2,1, 0,0,0},
+    {1,7,2, 8,9,5, 3,6,4}}
+  },{"393 ****",
+   (int[SIZE][SIZE])
+   {{0,8,1, 0,0,0, 4,0,0},
+    {2,0,6, 4,0,8, 0,9,1},
+    {4,0,7, 0,6,0, 8,0,2},
+
+    {0,0,3, 0,0,4, 2,8,0},
+    {0,6,2, 5,0,9, 3,0,4},
+    {0,7,4, 2,0,0, 0,0,0},
+               
+    {6,1,8, 0,4,0, 0,0,0},
+    {7,4,5, 8,0,0, 0,0,3},
+    {3,2,9, 0,0,0, 1,4,8}}
+  },{"201 ***",
+   (int[SIZE][SIZE])
+   {{8,0,2, 1,3,9, 7,6,0},
+    {0,0,0, 8,7,6, 0,2,3},
+    {3,7,6, 2,5,4, 1,9,8},
+
+    {0,0,3, 0,8,0, 0,0,0},
+    {0,0,5, 6,0,1, 3,0,0},
+    {0,0,0, 3,4,0, 9,0,0},
+               
+    {5,0,0, 4,1,0, 0,3,7},
+    {0,2,0, 7,6,3, 0,0,9},
+    {0,3,7, 0,0,0, 0,0,1}}
+  },{"394 ****",
+   (int[SIZE][SIZE])
+   {{0,6,0, 0,3,0, 0,8,0},
+    {0,0,0, 4,0,0, 0,1,7},
+    {0,1,0, 8,0,7, 0,0,0},
+
+    {4,0,5, 0,0,0, 1,0,0},
+    {0,2,1, 0,0,0, 6,7,5},
+    {6,0,9, 0,0,0, 2,4,8},
+               
+    {0,0,0, 6,0,3, 0,2,0},
+    {1,0,0, 0,0,5, 0,0,0},
+    {0,9,0, 0,8,0, 0,5,0}}
+  },{"211 fiendish",
+   (int[SIZE][SIZE])
+   {{0,8,0, 6,2,3, 1,7,5},
+    {5,2,0, 0,9,0, 3,6,4},
+    {0,6,0, 4,0,5, 8,2,9},
+
+    {8,1,0, 0,0,0, 0,0,6},
+    {0,0,5, 0,0,0, 7,1,0},
+    {6,0,0, 0,0,0, 0,9,8},
+               
+    {0,0,0, 1,0,0, 0,0,0},
+    {2,0,6, 0,4,0, 0,8,1},
+    {1,9,8, 2,0,0, 0,0,0}}
+  },{"213 fiendish",
+   (int[SIZE][SIZE])
+   {{6,8,0, 0,2,0, 0,0,7},
+    {7,0,0, 9,0,0, 0,8,0},
+    {0,0,9, 0,8,7, 0,0,0},
+
+    {0,2,7, 6,5,0, 3,0,8},
+    {5,9,8, 7,1,3, 0,0,4},
+    {0,6,3, 2,0,8, 7,5,0},
+               
+    {0,0,0, 8,7,0, 4,0,0},
+    {0,7,0, 0,0,5, 8,0,2},
+    {8,0,0, 0,3,0, 0,7,6}}
+  },{"218 fiendish",
+   (int[SIZE][SIZE])
+   {{1,3,8, 5,9,7, 6,4,2},
+    {0,0,6, 0,0,8, 0,5,7},
+    {5,7,0, 0,0,0, 0,0,3},
+
+    {7,5,0, 6,0,0, 0,0,0},
+    {0,0,1, 7,8,0, 3,0,0},
+    {8,0,0, 0,0,9, 0,7,0},
+               
+    {3,9,7, 8,0,0, 4,2,1},
+    {4,1,2, 9,7,3, 5,0,0},
+    {6,8,5, 2,1,4, 7,3,9}}
   }};
               
 //iboard boards[] = {
@@ -1154,9 +1593,37 @@ iboard boards[] = {
 //};  
 
 board_t board;  // this is the global board that I shouldn't have.
+
+void clear_lists(const string& name, board_t& board, int row, int col) {
+  int v = board[row][col].get_value();
+  if (v < 1)
+    return;
+  for (int r = 0; r < SIZE; ++r) {
+    for (int c = 0;c < SIZE; ++c) {
+      if (r == row && c == col)
+        continue;
+      int n = board[r][c].value_set.size();
+      if (r == row || c == col) {
+        board[r][c].value_set.erase(v);
+      } else {
+        if (r/3 == row/3 && c/3 == col/3)
+          board[r][c].value_set.erase(v);
+      }
+      if (n > 1 && board[r][c].value_set.size() == 1) {
+        char buf[20];
+        sprintf(buf, "{%d,%d}", r+1, c+1);
+        maybe_log("found %d in {%d,%d} because it's all that's left\n",
+                  buf,
+                  board[r][c].get_value(),
+                  r+1, c+1);
+      }
+    }
+  }
+}  
 iboard altcolor("color");
 int maxmoves = -1;
 void printboard(const char*);
+void printdata(ostream& s, std::string& title, const board_t& b);
 bool putps = true;
 bool interior_possibilities = false;
 
@@ -1197,10 +1664,10 @@ struct Collection {
       return (r == other.r || c == other.c ||
               (use_cell_too && (r/3 == other.r/3 && c/3 == other.c/3)));
     }
-    std::string loc() const {
+    void loc(string* str) const {
       std::ostringstream s;
       s << "{" << r+1 << "," << c+1 << "}";
-      return s.str();
+      *str = s.str();
     }
   };
   std::string name;
@@ -1274,11 +1741,13 @@ struct Collection {
   
   std::string locs() const {
     std::ostringstream s;
+    string str;
     bool notfirst = false;
     for (const auto c : cells) {
       if (notfirst)
         s << ",";
-      s << c.loc();
+      c.loc(&str);
+      s << str;
       notfirst = true;
     }
     return s.str();
@@ -1397,8 +1866,10 @@ void print_collection(const Collection& c, const char* comment = 0) {
     comment = "collection ";
   }
   printf("%s%s: ", comment, c.name.c_str());
+  string str;
   for (const Collection::ccell& cell : c.cells) {
-    printf("%s,", cell.loc().c_str());
+    cell.loc(&str);
+    printf("%s,", str.c_str());
   }
   printf("\n");
 }
@@ -1474,10 +1945,14 @@ void blockScollection(int block, Collection* c) {
   blockcollection(3*(block%3), 3*(block/3), c);
 }
 
+// Take a collection of <r,c> pairs, and accumulate a
+// set of known values (a known value has value_set.size() == 1)
+// in that collection.
 void collection_to_set(const Collection& c, set<int>* s) {
   for (const auto& ccell : c.cells) {
-    if (board[ccell.r][ccell.c].value > 0)
-      s->insert(board[ccell.r][ccell.c].value);
+    auto v = board[ccell.r][ccell.c].get_value();
+    if (v > 0)
+      s->insert(v);
   }
 }
 
@@ -1529,8 +2004,9 @@ void blockset(int a, int b, set<int>* s) {
 // How many entries would work in this cell?
 int possibilities(int r, int c, set<int>* result) {
   set<int> s;
-  if (board[r][c].value != 0) {
-    result->insert(board[r][c].value);
+  auto v = board[r][c].get_value();
+  if (v > 0) {
+    result->insert(v);
     return 1;
   }
   arbset(r, c, rowcollection, &s);
@@ -1551,7 +2027,8 @@ int possibilities(int r, int c, set<int>* result) {
 void set_lists() {
   for (int r = 0;r < SIZE;++r) {
     for (int c = 0;c < SIZE; ++c) {
-      board[r][c].value_set.clear();
+      if (board[r][c].value_set.size() != 1)
+        board[r][c].value_set.clear();
       possibilities(r, c, &board[r][c].value_set);
       board[r][c].set_mask();
     }
@@ -1573,10 +2050,10 @@ void reduce_lists() {
   }
 }
 
-void find_sets(int r, int c, Setfcn fcn) {
-  Collection col;
-  fcn(r, c, &col);
-}
+// void find_sets(int r, int c, Setfcn fcn) {
+//   Collection col;
+//   fcn(r, c, &col);
+// }
 
 // remove any cell in col that can't have val in it.
 void remove_from_collection_not(int val, Collection* col) {
@@ -1595,6 +2072,7 @@ void remove_from_collection_not(int val, Collection* col) {
 // There's only one possible candidate for this cell
 // because all other candidates are in the same row, column,
 // or block.
+// Returns: 
 int eliminate(int r, int c) {
   set<int> s;
   if (possibilities(r, c, &s) == 1) {
@@ -1610,7 +2088,7 @@ int eliminate(int r, int c) {
 // The candidate is in this row..
 bool rowhas(int cand, int row) {
   for (int col = 0; col < SIZE; ++col) {
-    if (board[row][col].value == cand) return true;
+    if (board[row][col].get_value() == cand) return true;
   }
   return false;
 }
@@ -1618,7 +2096,7 @@ bool rowhas(int cand, int row) {
 // The candidate is in this col.
 bool colhas(int cand, int col) {
   for (int row = 0; row < SIZE; ++row) {
-    if (board[row][col].value == cand) return true;
+    if (board[row][col].get_value() == cand) return true;
   }
   return false;
 }
@@ -1626,7 +2104,7 @@ bool colhas(int cand, int col) {
 bool alldone() {
   for (int r = 0; r < SIZE; ++r) {
     for (int c = 0;c < SIZE; ++c) {
-      if (!board[r][c].value)
+      if (board[r][c].value_set.size() != 1)
         return false;
     }
   }
@@ -1635,8 +2113,6 @@ bool alldone() {
 
 set<string> done_progress;
 
-// Side effect: sets the value for cells that have list size 1
-// after removing val.
 bool mayberemove(const string& name, const string& stepname,
                  const Collection::ccell& thecell, int val) {
   if (!thecell.can_have(val)) {
@@ -1644,15 +2120,16 @@ bool mayberemove(const string& name, const string& stepname,
   }
   if (maxmoves == 0) return false;
   else if (maxmoves > 0) --maxmoves;
-  maybe_log("erase %d in %s by %s\n", thecell.loc().c_str(),
-            val, thecell.loc().c_str(), name.c_str());
+  string loc;
+  thecell.loc(&loc);
+  maybe_log("erase %d in %s by %s\n", loc.c_str(),
+            val, loc.c_str(), name.c_str());
   thecell.value_set().erase(val);
   if (thecell.value_set().size() == 1) {
-    board[thecell.r][thecell.c].set_value(*thecell.value_set().begin());
     maybe_log("found %d in %s because it's all that's left\n",
-              thecell.loc().c_str(),
-              board[thecell.r][thecell.c].value,
-              thecell.loc().c_str());
+              loc.c_str(),
+              *board[thecell.r][thecell.c].value_set.begin(),
+              loc.c_str());
   }
   thecell.set_mask();
   return true;
@@ -1753,7 +2230,7 @@ bool tryhiddencells(GetCollection& g) {
             // If the mask of this cell extends beyond our mask,
             // then remove those parts.
             if ((cell.mask() & !mask) != 0) {
-              set_lists();
+              // set_lists();
               printf("AHA! Hiddencells!\n");
               exit(1);
             }
@@ -1954,7 +2431,6 @@ bool tryywing(const Collection& twocells) {
       }
     }
   }
-  printf("tryywing returns %s\n", (retval ? "true" : "false"));
   return retval;
 }
 
@@ -2006,10 +2482,12 @@ bool tryswordfish(const char* name,
     colf.GetName(&colname);
     s << "swordfish(" << candidate << ","
       << rowname << "," << colname << ") from {";
+    string loc;
     for (const auto& r : rows) {
       s << "(";
       for (const auto& cell : r.second.cells) {
-        s << cell.loc();
+        cell.loc(&loc);
+        s << loc;
       }
       s << ")";
     }
@@ -2064,7 +2542,8 @@ bool blockhas(int cand, int a, int b) {
   b /= 3;
   for (int row = 0; row < 3; ++row) {
     for (int col = 0; col < 3; ++col) {
-      if (board[3*a + row][3*b + col].value == cand) return true;
+      if (board[3*a + row][3*b + col].get_value() == cand)
+        return true;
     }
   }
   return false;
@@ -2148,8 +2627,8 @@ void printboard(const char* filename) {
       fputs("-------------------------------\n", stdout);
     for (int c = 0;c < SIZE; ++c) {
       if (!(c%3)) fputs("|", stdout);
-      if (board[r][c].value)
-	printf(" %d ", board[r][c].value);
+      if (board[r][c].get_value())
+	printf(" %d ", board[r][c].get_value());
       else
 	printf("   ");
     }
@@ -2173,29 +2652,31 @@ void printboard(const char* filename) {
     }
     for (int r = 0;r < SIZE;++r) {
       for (int c = 0;c < SIZE; ++c) {
-	if (board[r][c].value) {
+	if (board[r][c].get_value()) {
 	  fprintf(f, "gsave\n");
 	  if (altcolor.data[r][c])
 	    fprintf(f, "0 1 0 setrgbcolor\n");
-	  fprintf(f, "%d %d (%d) bigstring\n", c+1, r+1, board[r][c].value);
+	  fprintf(f, "%d %d (%d) bigstring\n", c+1, r+1, board[r][c].get_value());
 	  fprintf(f, "grestore\n");
 	} else {
-          if (interior_possibilities) {
-            for (auto d : board[r][c].value_set) {
-              fprintf(f, "%d %d %d digit\n",
-                      c+1, r+1, d);
-            }            
-          } else {
-            const auto &mylist = board[r][c].value_set;
-            if (mylist.size() <= NPOSS) {
-              char str[10];
-              char* q = str;
-              for (auto e : mylist) {
-                *q++ = '0' + e;
+          if (board[r][c].value_set.size() < SIZE-1) {
+            if (interior_possibilities) {
+              for (auto d : board[r][c].value_set) {
+                fprintf(f, "%d %d %d digit\n",
+                        c+1, r+1, d);
+              }            
+            } else {
+              const auto &mylist = board[r][c].value_set;
+              if (mylist.size() <= NPOSS) {
+                char str[10];
+                char* q = str;
+                for (auto e : mylist) {
+                  *q++ = '0' + e;
+                }
+                *q = 0;
+                fprintf(f, "%d %d (%s) smallstring\n",
+                        c+1, r+1, str);
               }
-              *q = 0;
-              fprintf(f, "%d %d (%s) smallstring\n",
-                      c+1, r+1, str);
             }
           }
         }
@@ -2204,6 +2685,37 @@ void printboard(const char* filename) {
     fprintf(f, "showpage\n");
     fclose(f);
   }
+}
+
+bool readdata(istream& s, string title, board_t board) {
+  return false;
+}
+
+void printdata(ostream& s, const string& title, const board_t& b) {
+  s << "name: \"" << title << "\"" << std::endl;
+  s << "data:" << std::endl;
+  for (int row = 0;row < SIZE; ++row) {
+    for (int col = 0;col < SIZE; ++col) {
+      if (col % 3 == 0) {
+        s << " ";
+      }
+      s << " " << b[row][col].get_value();
+    }
+    if (row%3 == 2) {
+      s << std::endl;
+    }
+    s << std::endl;
+  }
+}
+
+void printthonky(ostream& s, const board_t& b) {
+  for (int row = 0;row < SIZE; ++row) {
+    for (int col = 0;col < SIZE; ++col) {
+      int v = b[row][col].get_value();
+      s << (char)(v == 0 ? '.' : '0'+v);
+    }
+  }
+  s << std::endl;
 }
 
 // This candidate can't be in any other position of this row, col, or block.
@@ -2222,7 +2734,7 @@ string exclude(int cand, int r, int c) {
   bool hit = true;
   for (int row = 0;row < SIZE; ++row) {
     if (row == r) continue;
-    if (board[row][c].value) continue;
+    if (board[row][c].get_value()) continue;
     if (!(rowhas(cand, row) || blockhas(cand,row,c))) {
       hit = false;
       break;
@@ -2233,7 +2745,7 @@ string exclude(int cand, int r, int c) {
   hit = true;
   for (int col = 0;col < SIZE; ++col) {
     if (col == c) continue;
-    if (board[r][col].value) continue;
+    if (board[r][col].get_value()) continue;
     if (!(colhas(cand, col) || blockhas(cand,r,col))) {
       hit = false;
       break;
@@ -2246,7 +2758,7 @@ string exclude(int cand, int r, int c) {
       int row = blockrow + 3*(r/3);
       int col = blockcol + 3*(c/3);
       if (row == r && col == c) continue;
-      if (board[row][col].value) continue;
+      if (board[row][col].get_value()) continue;
       if (!(rowhas(cand, row) || colhas(cand, col))) {
 	return "";
       }
@@ -2257,10 +2769,9 @@ string exclude(int cand, int r, int c) {
 
 void msg(int cand, int r, int c, const string& by, const string& what) {
   char loc[20];
-  sprintf(loc, "(%d,%d)", r+1, c+1);
-  maybe_log("found %d at (%d,%d) by %s(%s)\n", loc, cand, r+1, c+1,
+  sprintf(loc, "{%d,%d}", r+1, c+1);
+  maybe_log("found %d at {%d,%d} by %s(%s)\n", loc, cand, r+1, c+1,
 	 by.c_str(), what.c_str());
-  //  printboard(0);
 }
 
 int makebasicmoves(int* pMaxmoves) {
@@ -2270,12 +2781,15 @@ int makebasicmoves(int* pMaxmoves) {
     found = false;
     for (int r = 0;r < SIZE;++r) {
       for (int c = 0;c < SIZE; ++c) {
-	if (board[r][c].value > 0) continue;
-	if (int e = eliminate(r, c)) {
+	if (board[r][c].get_value() > 0) {
+          clear_lists("basic", board, r, c);
+          continue;
+        }
+        if (int e = eliminate(r, c)) {
 	  if (e < 0) {
 	    maybe_log("Problem impossible (%d,%d)\n", "", r+1, c+1);
             maybe_log("%d moves\n", "", mademoves);
-            set_lists();
+            // set_lists();
             printboard("sudokuboardfailure.ps");
 	    exit(1);
 	  } else {
@@ -2293,7 +2807,7 @@ int makebasicmoves(int* pMaxmoves) {
     if (found) continue;
     for (int r = 0;r < SIZE;++r) {
       for (int c = 0;c < SIZE; ++c) {
-	if (board[r][c].value > 0) continue;
+	if (board[r][c].get_value() > 0) continue;
 	for (int e = 1;e <= 9;++e) {
 	  string what = exclude(e, r, c);
 	  if (!what.empty()) {
@@ -2358,10 +2872,10 @@ void initboarddata(const iboard& b) {
 
 bool solve_board() {
   maybe_log("%s\n", "", title);
-  set_lists();
+  // set_lists();
   printboard(0);
   makebasicmoves(&maxmoves);
-  set_lists();
+  // set_lists();
   printboard("sudokuboard0basic.ps");
   bool changed = true;
   while (changed && !alldone()) {
@@ -2425,12 +2939,17 @@ main(int nargs, const char* args[]) {
     //   cout << "mask: " << n << " " <<  bin << endl;
     // }
   }
+  bool justprint = false;
+  bool write_data = false;
+  bool read_data = false;
+  bool write_thonky = false;
+  const char *filename = 0;
   while(nargs > 1) {
     if (args[1][1] == 'b') {
       // blank board print
       for (int i = 0 ; i < SIZE; ++i) {
 	for (int j = 0 ; j < SIZE; ++j) {
-	  board[i][j].value = 0;
+	  board[i][j].set_value(0);
 	}
       }
       printboard("sudokuboard.ps");
@@ -2438,9 +2957,7 @@ main(int nargs, const char* args[]) {
     }
     if (args[1][1] == 'p') {
       // Just print the starting board.
-      set_lists();
-      printboard("sudokuboard.ps");
-      return 0;
+      justprint = true;
     }
     if (args[1][1] == 'm') {
       // set the number of moves to make (to partially solve).
@@ -2501,9 +3018,15 @@ main(int nargs, const char* args[]) {
       if (regexec(&regbuf, b.name, 0, 0, 0) == 0) {
         myboard = b;
         initboarddata(myboard);
+        printf("found board %s\n", b.name);
         break;
       }
     }
+  }
+  if (justprint) {
+    // set_lists();
+    printboard("sudokuboard.ps");
+    exit(0);
   }
   solve_board();
   printboard("sudokuboard.ps");
