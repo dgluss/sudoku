@@ -3,6 +3,7 @@
 #include <bitset>
 #include <cstdio>
 #include <fstream>
+#include <getopt.h>
 #include <iostream>
 #include <map>
 #include <ostream>
@@ -14,8 +15,9 @@
 #include <string>
 #include <vector>
 
-// TODO: ywing, forcingchain (which seems pretty hard)
-//  rectangle elimination, simple pairs (uses conjugate pairs)
+// TODO: XY chain, simple coloring
+// forcingchain (which seems pretty hard)
+// rectangle elimination, simple pairs (uses conjugate pairs)
 // https://www.thonky.com/sudoku
 
 //#include <cassert>
@@ -60,6 +62,7 @@ public:
   Ordered_Min_Two_Masks() {
     // the mask has to have at least two cells, but fewer than 9
     int loc = 0;
+    // 3 is the smallest integer with two ones in its binary representation.
     for (int n = 3; n < MAXMASK - 1; ++n) {
       if (one_count(n) < 2)
         continue;
@@ -107,10 +110,19 @@ struct cell {
     set_mask();
   }
 
+  void maybe_set_value(int v) {
+    if (v > 0)
+      set_value(v);
+  }
+
   void set_value(int v) {
+    value_set.clear();
     if (v > 0) {
-      value_set.clear();
       value_set.insert(v);
+    } else {
+      for (int v = 1; v <= SIZE; ++v) {
+        value_set.insert(v);
+      }
     }
     set_mask();
   }
@@ -152,7 +164,7 @@ struct iboard {
 };
 typedef struct cell board_t[SIZE][SIZE];
 
-const char* title;
+string title;
 const char* searchstr = "";
 iboard boards[] = {
   {"337",
@@ -1214,7 +1226,7 @@ iboard boards[] = {
     {0,6,0, 0,4,5, 0,0,7},
     {1,0,0, 0,0,0, 0,0,0},
     {0,0,0, 7,2,0, 9,3,0}}
-  },{"377w****",
+  },{"377w",
    (int[SIZE][SIZE])
    {{2,7,5, 6,9,4, 3,8,1},
     {4,8,3, 1,5,7, 6,9,2},
@@ -1487,6 +1499,19 @@ iboard boards[] = {
     {3,9,7, 8,0,0, 4,2,1},
     {4,1,2, 9,7,3, 5,0,0},
     {6,8,5, 2,1,4, 7,3,9}}
+  },{"thonkyveryhard",
+   (int[SIZE][SIZE])
+   {{6,5,4, 3,2,8, 0,0,0},
+    {7,8,2, 4,1,9, 6,5,3},
+    {3,0,0, 7,5,6, 4,2,8},
+
+    {9,4,0, 5,8,1, 2,0,6},
+    {0,0,5, 6,4,2, 0,0,0},
+    {2,6,0, 9,3,7, 0,4,0},
+
+    {0,0,6, 2,9,4, 0,0,0},
+    {4,0,0, 8,7,5, 1,6,2},
+    {0,2,0, 1,6,3, 0,0,4}}
   }};
               
 //iboard boards[] = {
@@ -1623,9 +1648,11 @@ void clear_lists(const string& name, board_t& board, int row, int col) {
 iboard altcolor("color");
 int maxmoves = -1;
 void printboard(const char*);
-void printdata(ostream& s, std::string& title, const board_t& b);
+void printdata(const string& filename,
+               const string& title,
+               const board_t& b);
 bool putps = true;
-bool interior_possibilities = false;
+int interior_possibilities = 0;
 
 // max # possibilities to put in the postscript
 const int NPOSS = 6;
@@ -1659,10 +1686,10 @@ struct Collection {
       return value_set().find(i) != value_set().end();
     }
     // The two ccells share a coordinate (same row or column) or are
-    // in the same block.
-    bool haslinkto(const ccell& other, bool use_cell_too) const {
+    // (optionally) in the same block.
+    bool haslinkto(const ccell& other, bool use_block_too) const {
       return (r == other.r || c == other.c ||
-              (use_cell_too && (r/3 == other.r/3 && c/3 == other.c/3)));
+              (use_block_too && (r/3 == other.r/3 && c/3 == other.c/3)));
     }
     void loc(string* str) const {
       std::ostringstream s;
@@ -1778,9 +1805,9 @@ struct GetCollection {
       New(0, n, col);
       break;
     case BLOCK:
-      int a = 3*(n%3);
-      int b = 3*(n/3);
-      New(a, b, col);
+      New(3*(n%3), 3*(n/3), col);
+      break;
+    case ARBITRARY:
       break;
     }
   }
@@ -1795,6 +1822,9 @@ struct GetCollection {
       return;
     case BLOCK:
       *out = "block";
+      return;
+    case ARBITRARY:
+      *out = "arbitrary";
       return;
     }
   }
@@ -1933,6 +1963,21 @@ void twochoicecollection(Collection* c) {
   for (int r = 0; r < SIZE; ++r) {
     for (int col = 0;col < SIZE; ++col) {
       if (board[r][col].value_set.size() == 2) {
+        e.r = r;
+        e.c = col;
+        c->cells.insert(e);
+      }
+    }
+  }
+}
+
+// This collects all of the cells on the board that have exactly three choices.
+void threechoicecollection(Collection* c) {
+  c->name = "threechoices";
+  Collection::ccell e;
+  for (int r = 0; r < SIZE; ++r) {
+    for (int col = 0;col < SIZE; ++col) {
+      if (board[r][col].value_set.size() == 3) {
         e.r = r;
         e.c = col;
         c->cells.insert(e);
@@ -2116,6 +2161,10 @@ set<string> done_progress;
 bool mayberemove(const string& name, const string& stepname,
                  const Collection::ccell& thecell, int val) {
   if (!thecell.can_have(val)) {
+    return false;
+  }
+  if (thecell.value_set().size() < 2) {
+    printf("OMG!\n");
     return false;
   }
   if (maxmoves == 0) return false;
@@ -2376,14 +2425,14 @@ bool tryonexwing() {
 // the pivot and pincer cells.
 bool tryywing(const Collection& twocells) {
   bool retval = false;
-  for (auto& pivot : twocells.cells) {
-    const auto& vpivot = pivot.value_set();
+  for (const auto& pivot : twocells.cells) {
+    const auto& pivot_values = pivot.value_set();
     for (auto& pincer1 : twocells.cells) {
       if (pincer1 == pivot) continue;
       if (!pivot.haslinkto(pincer1, true)) continue;
       const auto& vpincer1 = pincer1.value_set();
       set<int> intersect1;
-      set_intersection(vpivot.begin(), vpivot.end(),
+      set_intersection(pivot_values.begin(), pivot_values.end(),
                        vpincer1.begin(), vpincer1.end(),
                        std::inserter(intersect1, intersect1.begin()));
       if (intersect1.size() != 1) continue;
@@ -2393,7 +2442,7 @@ bool tryywing(const Collection& twocells) {
         if (!pivot.haslinkto(pincer2, true)) continue;
         const auto& vpincer2 = pincer2.value_set();
         set<int> intersect2;
-        set_intersection(vpivot.begin(), vpivot.end(),
+        set_intersection(pivot_values.begin(), pivot_values.end(),
                        vpincer2.begin(), vpincer2.end(),
                        std::inserter(intersect2, intersect2.begin()));
         if (intersect2.size() != 1) continue;
@@ -2404,7 +2453,7 @@ bool tryywing(const Collection& twocells) {
         // printf("pivot (%d,%d) pincer1 (%d,%d) pincer2 (%d,%d)\n",
         //        pivot.r+1, pivot.c+1, pincer1.r+1, pincer1.c+1,
         //        pincer2.r+1, pincer2.c+1);
-        for (auto v : vpivot) {
+        for (auto v : pivot_values) {
           allvals.erase(v);
         }
         int bad = *allvals.begin();
@@ -2418,10 +2467,6 @@ bool tryywing(const Collection& twocells) {
             if (ccell.haslinkto(pincer1, true)
                 && ccell.haslinkto(pincer2, true)) {
               std::ostringstream s;
-              s << "ywing(pivot=" << pivot.r+1 << "," << pivot.c+1
-                << ", pincer1=" << pincer1.r+1 << "," << pincer1.c+1
-                << ", pincer2=" << pincer2.r+1 << "," << pincer2.c+1
-                << ")";
               if (mayberemove(s.str(), "ywing", ccell, bad)) {
                 retval = true;
               }
@@ -2438,6 +2483,78 @@ bool tryoneywing() {
   Collection twocells;
   twochoicecollection(&twocells);
   return tryywing(twocells);
+}
+
+// All cells in "twocells" have length-2 lists and so are suitable for
+// the pincer cells. Cells in threecells have length-3 lists and so are
+// good for the pivot cell.
+bool tryxyzwing(const Collection& threecells, const Collection& twocells) {
+  bool retval = false;
+  for (const auto& pivot : threecells.cells) {
+    const auto& pivot_values = pivot.value_set();
+    for (auto& pincer1 : twocells.cells) {
+      if (pincer1 == pivot) continue;
+      if (!pivot.haslinkto(pincer1, true)) continue;
+      const auto& pincer1_values = pincer1.value_set();
+      set<int> intersect1;
+      set_intersection(pivot_values.begin(), pivot_values.end(),
+                       pincer1_values.begin(), pincer1_values.end(),
+                       std::inserter(intersect1, intersect1.begin()));
+      if (intersect1.size() != 2) continue;
+      for (auto& pincer2 : twocells.cells) {
+        if (pincer2 == pivot) continue;
+        if (pincer2 == pincer1) continue;
+        if (!pivot.haslinkto(pincer2, true)) continue;
+        const auto& pincer2_values = pincer2.value_set();
+        set<int> intersect2;
+        set_intersection(pivot_values.begin(), pivot_values.end(),
+                       pincer2_values.begin(), pincer2_values.end(),
+                       std::inserter(intersect2, intersect2.begin()));
+        if (intersect2.size() != 2) continue;
+        if (intersect2 == intersect1) continue;
+        cout << "XYZWING: test pivot=(" << pivot.r+1 << "," << pivot.c+1 << "),"
+             << "pincer1=(" << pincer1.r+1 << "," << pincer1.c+1 << "),"
+             << "pincer2=(" << pincer2.r+1 << "," << pincer2.c+1 << "))"
+             << endl;
+        set<int> intersect3;
+        set_intersection(pincer1_values.begin(), pincer1_values.end(),
+                       pincer2_values.begin(), pincer2_values.end(),
+                       std::inserter(intersect3, intersect3.begin()));
+        assert(intersect3.size() == 1);
+        int bad = *intersect3.begin();
+        for (int r = 0; r < SIZE; ++r) {
+          for (int c = 0; c < SIZE; ++c) {
+            Collection::ccell ccell;
+            ccell.r = r;
+            ccell.c = c;
+            if (ccell == pivot || ccell == pincer1 || ccell == pincer2)
+              continue;
+            if (ccell.haslinkto(pincer1, true)
+                && ccell.haslinkto(pincer2, true)
+                && ccell.haslinkto(pivot, true)) {
+              std::ostringstream s;
+              s << "xyzwing(pivot=" << pivot.r+1 << "," << pivot.c+1
+                << ", pincer1=" << pincer1.r+1 << "," << pincer1.c+1
+                << ", pincer2=" << pincer2.r+1 << "," << pincer2.c+1
+                << ")";
+              if (mayberemove(s.str(), "xyzwing", ccell, bad)) {
+                retval = true;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return retval;
+}
+
+bool tryonexyzwing() {
+  Collection twocells;
+  twochoicecollection(&twocells);
+  Collection threecells;
+  threechoicecollection(&threecells);
+  return tryxyzwing(threecells, twocells);
 }
 
 bool tryswordfish(const char* name,
@@ -2525,16 +2642,6 @@ bool tryoneswordfish() {
   }
   return false;
 }
-
-bool tryallcoloring(int candidate) {
-  bool r = false;
-  GetCollection gr(GetCollection::ROW);
-  GetCollection gc(GetCollection::COL);
-  GetCollection gb(GetCollection::BLOCK);
-  return false;
-}
-
-bool tryforcingchain() {return false;}
 
 // The candidate is in this block. a and b are in {0-8}
 bool blockhas(int cand, int a, int b) {
@@ -2647,8 +2754,8 @@ void printboard(const char* filename) {
             1 + now->tm_mon,
             now->tm_mday);
     fprintf(f, "1 0 (%s) smallstring\n", filename);
-    if (title[0]) {
-      fprintf(f, "8 -1 (%s) bigstring\n", title);
+    if (title.size() > 0) {
+      fprintf(f, "8 -1 (%s) bigstring\n", title.c_str());
     }
     for (int r = 0;r < SIZE;++r) {
       for (int c = 0;c < SIZE; ++c) {
@@ -2687,11 +2794,56 @@ void printboard(const char* filename) {
   }
 }
 
-bool readdata(istream& s, string title, board_t board) {
+void print_c_struct(const string& filename,
+                    const string& title,
+                    const board_t& b) {
+  ofstream s(filename); 
+  s << "  },{\"" << title << "\"," << endl;
+  s << "   (int[SIZE][SIZE])" << endl;
+  for (int r = 0;r < SIZE;++r) {
+    if (r && !(r % 3)) {
+      s << endl;
+    }
+    if (r == 0) {
+      s << "   {{";
+    } else {
+      s << "    {";
+    }
+    for (int c = 0;c < SIZE; ++c) {
+      if (c && !(c % 3)) {
+        s << " ";
+      }
+      s << board[r][c].get_value();
+      if (c < SIZE-1) {
+        s << ",";
+      }
+    }
+    if (r < SIZE-1) {
+      s << "},";
+      s << endl;
+    }
+  }
+  s << "}}" << endl;
+}
+   // {{7,0,8, 2,0,0, 1,0,0},
+   //  {1,0,2, 0,0,7, 6,8,0},
+   //  {0,0,0, 0,0,0, 0,0,9},
+
+   //  {0,0,0, 4,0,8, 0,6,0},
+   //  {8,0,0, 0,0,0, 0,0,3},
+   //  {0,5,0, 9,0,6, 0,0,0},
+               
+   //  {4,0,0, 0,0,0, 0,0,0},
+   //  {0,8,9, 7,0,0, 3,0,6},
+   //  {0,0,7, 0,0,5, 2,0,1}}
+                    
+bool readdata(const string& filename, board_t* board) {
+  // oops...not implemented yet.
   return false;
 }
 
-void printdata(ostream& s, const string& title, const board_t& b) {
+void printdata(const string& filename, const string& title, const board_t& b) {
+  ofstream s(filename); 
   s << "name: \"" << title << "\"" << std::endl;
   s << "data:" << std::endl;
   for (int row = 0;row < SIZE; ++row) {
@@ -2708,7 +2860,8 @@ void printdata(ostream& s, const string& title, const board_t& b) {
   }
 }
 
-void printthonky(ostream& s, const board_t& b) {
+void printthonky(const string& filename, const board_t& b) {
+  ofstream s(filename); 
   for (int row = 0;row < SIZE; ++row) {
     for (int col = 0;col < SIZE; ++col) {
       int v = b[row][col].get_value();
@@ -2716,6 +2869,33 @@ void printthonky(ostream& s, const board_t& b) {
     }
   }
   s << std::endl;
+}
+
+bool readthonky(const string& filename, board_t* b) {
+  ifstream s(filename);
+  int row = 0;
+  int col = 0;
+  char c;
+  int val;
+  
+  title = filename;
+  while ((c = s.get())) {
+    if (c == EOF) return false;
+    if ((c < '1' || c > '9') && c != '.')
+      continue;
+    val = 0;
+    if (c >= '1' && c <= '9') {
+      val = c - '0';
+    }
+    (*b)[row][col].set_value(val);
+    if (++col >= SIZE) {
+      col = 0;
+      if (++row >= SIZE) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 // This candidate can't be in any other position of this row, col, or block.
@@ -2791,9 +2971,9 @@ int makebasicmoves(int* pMaxmoves) {
             maybe_log("%d moves\n", "", mademoves);
             // set_lists();
             printboard("sudokuboardfailure.ps");
-	    exit(1);
+            return(-1);
 	  } else {
-	    board[r][c].set_value(e);
+	    board[r][c].maybe_set_value(e);
 	    msg(e, r, c, "elimination", "");
 	  }
 	  found = true;
@@ -2839,8 +3019,9 @@ struct Progress {
   {"hiddencells", 3},
   {"xwing", 4},
   {"ywing", 5},
-  {"swordfish", 6},
-  {"final", 7},
+  {"xyzwing", 6},
+  {"swordfish", 7},
+  {"final", 8},
 };
 
 void print_progress(const char* name) {
@@ -2871,7 +3052,7 @@ void initboarddata(const iboard& b) {
 }
 
 bool solve_board() {
-  maybe_log("%s\n", "", title);
+  maybe_log("%s\n", "", title.c_str());
   // set_lists();
   printboard(0);
   makebasicmoves(&maxmoves);
@@ -2909,6 +3090,11 @@ bool solve_board() {
       print_progress("ywing");
       continue;
     }
+    changed = tryonexyzwing();
+    if (changed) {
+      print_progress("xyzwing");
+      continue;
+    }
     changed = tryoneswordfish();
     if (changed) {
       print_progress("swordfish");
@@ -2919,98 +3105,122 @@ bool solve_board() {
 }
 
 int
-main(int nargs, const char* args[]) {
+main(int nargs, char** args) {
   auto& myboard = boards[sizeof(boards)/sizeof(iboard) - 1];
   initboarddata(myboard);
-  {
-    GetCollection g(GetCollection::ARBITRARY);;
-    debug_collection.clear();
-    for (auto p : (int[][2]) {
-        {1,5},{1,6}
-      } ) {
-      g.Add(p[0] - 1, p[1] - 1, &debug_collection);
-    }
-    // cout << "debug_collection: ";
-    // print_collection(debug_collection);
-    ordered_min_two_masks = new(Ordered_Min_Two_Masks);
-    // for (int i = 0; i < ordered_min_two_masks->num_masks(); ++i) {
-    //   auto n = ordered_min_two_masks->list_of_masks()[i];
-    //   std::bitset<10> bin(n);
-    //   cout << "mask: " << n << " " <<  bin << endl;
-    // }
-  }
-  bool justprint = false;
-  bool write_data = false;
-  bool read_data = false;
-  bool write_thonky = false;
-  const char *filename = 0;
-  while(nargs > 1) {
-    if (args[1][1] == 'b') {
+  GetCollection g(GetCollection::ARBITRARY);;
+  debug_collection.clear();
+  // for (auto p : (int[][2]) {
+  //     {1,5},{1,6}
+  //   } ) {
+  //   g.Add(p[0] - 1, p[1] - 1, &debug_collection);
+  // }
+  // cout << "debug_collection: ";
+  // print_collection(debug_collection);
+  ordered_min_two_masks = new(Ordered_Min_Two_Masks);
+  // for (int i = 0; i < ordered_min_two_masks->num_masks(); ++i) {
+  //   auto n = ordered_min_two_masks->list_of_masks()[i];
+  //   std::bitset<10> bin(n);
+  //   cout << "mask: " << n << " " <<  bin << endl;
+  // }
+
+  int nosolve = 0;
+  int justprint = 0;
+  int write_data = 0;
+  int read_data = 0;
+  int write_thonky = 0;
+  int read_thonky = 0;
+  int write_c = 0;
+  const char *infilename = 0;
+   const char *outfilename = 0;
+   static option long_options[] = {
+     {"rd",     required_argument, &read_data,              1 },
+       {"rt",     required_argument, &read_thonky,            1 },
+         {"pd",     required_argument, &write_data,             1 },
+         {"pt",     required_argument, &write_thonky,           1 },
+         {"b",      no_argument,       0,                       0 },
+         {"p",      no_argument,       &justprint,              1 },
+         {"i",      no_argument,       &interior_possibilities, 1 },
+         {"n",      no_argument,       &nosolve,                1 },
+         {"a",      no_argument,       0,                       0 },
+         {"h",      no_argument,       0,                       0 },
+         {"m",      required_argument, 0,                       0 },
+         {"t",      required_argument, 0,                       0 },
+         {"s",      required_argument, 0,                       0 },
+         {"wc",     required_argument, &write_c,                1 },
+         {0,        0,                 0,                       0 },
+  };
+  int longind;
+  while (int rv = getopt_long_only(nargs, args,
+                                   "",
+                                   long_options,
+                                   &longind) >= 0) {
+    switch(longind) {
+    case 0: // rd: read_data
+    case 1: // rt: read_thonky
+      infilename = optarg;
+      break;
+    case 2: // pd: write_data
+    case 3: // pt: write_thonky
+      outfilename = optarg;
+      break;
+    case 4: /*b*/  // ",      no_argument,       0,                       0 },
       // blank board print
       for (int i = 0 ; i < SIZE; ++i) {
 	for (int j = 0 ; j < SIZE; ++j) {
 	  board[i][j].set_value(0);
 	}
       }
+      title = "";
       printboard("sudokuboard.ps");
       return 0;
-    }
-    if (args[1][1] == 'p') {
-      // Just print the starting board.
-      justprint = true;
-    }
-    if (args[1][1] == 'm') {
-      // set the number of moves to make (to partially solve).
-      if (nargs == 2) {
-	printf("the -m flag needs an integer argument, e.g. -m 2\n");
-	return(1);
-      }
-      nargs--;
-      args++;
-      maxmoves = atoi(args[1]);
-    }
-    if (args[1][1] == 't') {
-      if (nargs == 2) {
-	printf("the -t (title) flag needs a string argument\n");
-	return(1);
-      }
-      nargs--;
-      args++;
-      title = args[1];
-    }
-    if (args[1][1] == 's') {
-      if (nargs == 2) {
-	printf("the -s (search) flag needs a string argument\n");
-	return(1);
-      }
-      nargs--;
-      args++;
-      searchstr = args[1];
-    }
-    if (args[1][1] == 'h') {
-      // hint mode: don't print the full description of the move.
-      hintmode = CELLONLY;
-    }
-    if (args[1][1] == 'i') {
-      // put possibilities inside the square instead of at the top.
-      interior_possibilities = true;
-    }
-    if (args[1][1] == 'a') {
+    case 5: // p: justprint
+      break;
+    case 6: // i: interior_possibilities
+      break;
+    case 7: // n: nosolve
+      break;
+    case 8: // a
       // try to solve all of the puzzles
       putps = false;
       for (auto& myboard : boards) {
         initboarddata(myboard);
         if (solve_board())
-          printf("%s WORKED.\n", title);
+          printf("%s WORKED.\n", title.c_str());
         else
-          printf("%s FAILED.\n", title);
+          printf("%s FAILED.\n", title.c_str());
         printboard(0);
       }
       exit(0);
+    case 9: // h
+      // hint mode: don't print the full description of the move.
+      hintmode = CELLONLY;
+      break;
+    case 10: // m
+      maxmoves = atoi(optarg);
+      break;
+    case 11: // t
+      title = args[1];
+      break;
+    case 12: // s
+      searchstr = optarg;
+      break;
+    case 13: // wc: write_c
+      outfilename = optarg;
     }
-    nargs--;
-    args++;
   }
+  // printf("\n\nnosolve = %d\n", nosolve);
+  // printf("justprint = %d\n", justprint);
+  // printf("write_data = %d\n", write_data);
+  // printf("read_data = %d\n", read_data);
+  // printf("write_thonky = %d\n", write_thonky);
+  // printf("read_thonky = %d\n", read_thonky);
+  // printf("interior_possibilities = %d\n", interior_possibilities);
+  // printf("maxmoves = %d\n", maxmoves);
+  // if (infilename)
+  //   printf("infilename = %s\n", infilename);
+  // if (outfilename)
+  //   printf("outfilename = %s\n", outfilename);
   if (searchstr && searchstr[0]) {
     regex_t regbuf;
     regcomp(&regbuf, searchstr, 0);
@@ -3023,11 +3233,28 @@ main(int nargs, const char* args[]) {
       }
     }
   }
+  if (read_data) {
+    readdata(infilename, &board);
+  }
+  if (read_thonky) {
+    readthonky(infilename, &board);
+  }
   if (justprint) {
     // set_lists();
     printboard("sudokuboard.ps");
     exit(0);
   }
-  solve_board();
+  if (!nosolve) solve_board();
+  if (write_data) {
+    printdata(outfilename, title, board);
+    exit(0);
+  }
+  if (write_thonky) {
+    printthonky(outfilename, board);
+    exit(0);
+  }
+  if (write_c) {
+    print_c_struct(outfilename, title, board);
+  }
   printboard("sudokuboard.ps");
 }
