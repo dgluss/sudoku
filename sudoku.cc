@@ -96,8 +96,35 @@ private:
   }
 };
 
+struct cellvalue {
+  int value, row, col;
+  bool operator==(const cellvalue& other) const {
+    return (value == other.value &&
+            row == other.row &&
+            col == other.col);
+  }
+};
+
+struct link {
+  cellvalue from, to;
+  enum {STRONG, WEAK} s;
+  bool otherside(cellvalue& from, cellvalue* to);
+};
+
+bool link::otherside(cellvalue& from, cellvalue* to) {
+  if (from == this->from) {
+    *to = this->to;
+    return true;
+  }
+  if (from == this->to) {
+    *to = this->from;
+    return true;
+  }
+  return false;
+}
+
 // A cell may have a value. The value_set is the set of currently
-// known possible values.
+// known possible values. The mask is a binary mask of the value_set.
 struct cell {
   set<int> value_set;
   int mask;
@@ -1499,6 +1526,19 @@ iboard boards[] = {
     {3,9,7, 8,0,0, 4,2,1},
     {4,1,2, 9,7,3, 5,0,0},
     {6,8,5, 2,1,4, 7,3,9}}
+  },{"169 moderate",
+   (int[SIZE][SIZE])
+   {{0,0,7, 6,8,2, 0,0,0},
+    {0,4,0, 1,5,9, 7,0,0},
+    {9,8,1, 3,4,7, 2,5,6},
+
+    {2,7,0, 9,6,1, 0,0,5},
+    {0,6,9, 5,7,3, 0,2,0},
+    {1,3,5, 4,2,8, 6,7,9},
+
+    {0,9,6, 0,1,4, 0,8,0},
+    {0,0,3, 0,9,5, 0,6,0},
+    {0,0,0, 0,3,6, 9,0,0}}
   },{"thonkyveryhard",
    (int[SIZE][SIZE])
    {{6,5,4, 3,2,8, 0,0,0},
@@ -1512,6 +1552,32 @@ iboard boards[] = {
     {0,0,6, 2,9,4, 0,0,0},
     {4,0,0, 8,7,5, 1,6,2},
     {0,2,0, 1,6,3, 0,0,4}}
+  },{"166 fiendish",
+   (int[SIZE][SIZE])
+   {{9,0,8, 0,0,0, 0,0,0},
+    {0,0,4, 1,8,0, 9,3,6},
+    {0,3,6, 4,9,2, 0,0,0},
+
+    {0,4,7, 8,3,6, 0,0,9},
+    {3,0,9, 5,1,4, 0,0,0},
+    {6,0,5, 7,2,9, 3,4,0},
+
+    {0,0,3, 9,5,1, 0,2,0},
+    {4,9,1, 2,0,8, 0,0,3},
+    {0,0,2, 0,4,0, 1,9,0}}
+  },{"165 fiendish",
+   (int[SIZE][SIZE])
+   {{5,8,0, 1,4,7, 0,0,0},
+    {0,0,0, 0,0,5, 0,8,4},
+    {0,0,4, 0,8,0, 5,7,0},
+
+    {6,3,0, 0,0,4, 8,0,7},
+    {2,0,0, 7,0,8, 0,0,3},
+    {8,4,7, 5,0,0, 0,1,9},
+
+    {0,6,8, 3,2,1, 7,0,5},
+    {3,5,0, 4,7,6, 0,0,8},
+    {0,0,0, 8,5,9, 0,0,0}}
   }};
               
 //iboard boards[] = {
@@ -1637,10 +1703,11 @@ void clear_lists(const string& name, board_t& board, int row, int col) {
       if (n > 1 && board[r][c].value_set.size() == 1) {
         char buf[20];
         sprintf(buf, "{%d,%d}", r+1, c+1);
-        maybe_log("found %d in {%d,%d} because it's all that's left\n",
+        maybe_log("found %d in {%d,%d} by %s\n",
                   buf,
                   board[r][c].get_value(),
-                  r+1, c+1);
+                  r+1, c+1,
+                  name.c_str());
       }
     }
   }
@@ -1687,18 +1754,18 @@ struct Collection {
     }
     // The two ccells share a coordinate (same row or column) or are
     // (optionally) in the same block.
-    bool haslinkto(const ccell& other, bool use_block_too) const {
+    bool has_connection_to(const ccell& other, bool use_block_too) const {
       return (r == other.r || c == other.c ||
               (use_block_too && (r/3 == other.r/3 && c/3 == other.c/3)));
     }
     void loc(string* str) const {
-      std::ostringstream s;
+      ostringstream s;
       s << "{" << r+1 << "," << c+1 << "}";
       *str = s.str();
     }
   };
-  std::string name;
-  std::set<ccell, ccell::Compare> cells;
+  string name;
+  set<ccell, ccell::Compare> cells;
   void clear() {
     cells.clear();
   }
@@ -1706,7 +1773,7 @@ struct Collection {
   int link_count(const Collection::ccell other) const {
     int ct = 0;
     for (auto& my : cells) {
-      if (my.haslinkto(other, false)) {
+      if (my.has_connection_to(other, false)) {
         ++ct;
       }
     }
@@ -1717,7 +1784,7 @@ struct Collection {
     int ct = 0;
     for (const auto& my : cells) {
       for (const auto& they : other.cells) {
-        if (my.haslinkto(they, false)) {
+        if (my.has_connection_to(they, false)) {
           ++ct;
         }
       }
@@ -1766,8 +1833,8 @@ struct Collection {
     }
   }
   
-  std::string locs() const {
-    std::ostringstream s;
+  string locs() const {
+    ostringstream s;
     string str;
     bool notfirst = false;
     for (const auto c : cells) {
@@ -1812,7 +1879,7 @@ struct GetCollection {
     }
   }
 
-  void GetName(std::string* out) {
+  void GetName(string* out) {
     switch(type) {
     case ROW:
       *out = "row";
@@ -1834,7 +1901,7 @@ struct GetCollection {
     switch(type) {
     case ROW:
       col->name = "row ";
-      col->name += std::to_string(r+1);
+      col->name += to_string(r+1);
       e.r = r;
       for (int i=0;i<SIZE;++i) {
         e.c = i;
@@ -1843,7 +1910,7 @@ struct GetCollection {
       break;
     case COL:
       col->name = "col ";
-      col->name += std::to_string(c+1);
+      col->name += to_string(c+1);
       e.c = c;
       for (int i=0;i<SIZE;++i) {
         e.r = i;
@@ -1924,7 +1991,7 @@ void rowScollection(int row, Collection* c) {
 // Add a column to a Collection
 void colcollection(int, int col, Collection* c) {
   c->name = "col ";
-  c->name += std::to_string(col+1);
+  c->name += to_string(col+1);
   Collection::ccell e;
   e.c = col;
   for (int i=0;i<SIZE;++i) {
@@ -2087,9 +2154,9 @@ void reduce_lists() {
       possibilities(r, c, &list);
       set<int> intersection;
       auto was = board[r][c].value_set;
-      std::set_intersection(list.begin(), list.end(),
+      set_intersection(list.begin(), list.end(),
                             was.begin(), was.end(),
-                            std::inserter(intersection, intersection.begin()));
+                            inserter(intersection, intersection.begin()));
       board[r][c].value_set = intersection;
     }
   }
@@ -2130,7 +2197,7 @@ int eliminate(int r, int c) {
   return 0;
 }
 
-// The candidate is in this row..
+// The candidate is a value in this row.
 bool rowhas(int cand, int row) {
   for (int col = 0; col < SIZE; ++col) {
     if (board[row][col].get_value() == cand) return true;
@@ -2138,7 +2205,7 @@ bool rowhas(int cand, int row) {
   return false;
 }
 
-// The candidate is in this col.
+// The candidate is a value in this column.
 bool colhas(int cand, int col) {
   for (int row = 0; row < SIZE; ++row) {
     if (board[row][col].get_value() == cand) return true;
@@ -2206,7 +2273,7 @@ bool trynakedcells(GetCollection& g) {
       Collection othercells;
       col.Subtract(mycol, &othercells);
       // print_collection(othercells, "othercells: ");
-      std::ostringstream s;
+      ostringstream s;
       s << "nakedcells from: " << mycol.locs();
       set<int> values;
       mycol.GetValues(&values);
@@ -2429,22 +2496,22 @@ bool tryywing(const Collection& twocells) {
     const auto& pivot_values = pivot.value_set();
     for (auto& pincer1 : twocells.cells) {
       if (pincer1 == pivot) continue;
-      if (!pivot.haslinkto(pincer1, true)) continue;
+      if (!pivot.has_connection_to(pincer1, true)) continue;
       const auto& vpincer1 = pincer1.value_set();
       set<int> intersect1;
       set_intersection(pivot_values.begin(), pivot_values.end(),
                        vpincer1.begin(), vpincer1.end(),
-                       std::inserter(intersect1, intersect1.begin()));
+                       inserter(intersect1, intersect1.begin()));
       if (intersect1.size() != 1) continue;
       for (auto& pincer2 : twocells.cells) {
         if (pincer2 == pivot) continue;
         if (pincer2 == pincer1) continue;
-        if (!pivot.haslinkto(pincer2, true)) continue;
+        if (!pivot.has_connection_to(pincer2, true)) continue;
         const auto& vpincer2 = pincer2.value_set();
         set<int> intersect2;
         set_intersection(pivot_values.begin(), pivot_values.end(),
                        vpincer2.begin(), vpincer2.end(),
-                       std::inserter(intersect2, intersect2.begin()));
+                       inserter(intersect2, intersect2.begin()));
         if (intersect2.size() != 1) continue;
         if (intersect2 == intersect1) continue;
         set<int> allvals= vpincer1;
@@ -2464,9 +2531,9 @@ bool tryywing(const Collection& twocells) {
             ccell.c = c;
             if (ccell == pivot || ccell == pincer1 || ccell == pincer2)
               continue;
-            if (ccell.haslinkto(pincer1, true)
-                && ccell.haslinkto(pincer2, true)) {
-              std::ostringstream s;
+            if (ccell.has_connection_to(pincer1, true)
+                && ccell.has_connection_to(pincer2, true)) {
+              ostringstream s;
               if (mayberemove(s.str(), "ywing", ccell, bad)) {
                 retval = true;
               }
@@ -2494,32 +2561,32 @@ bool tryxyzwing(const Collection& threecells, const Collection& twocells) {
     const auto& pivot_values = pivot.value_set();
     for (auto& pincer1 : twocells.cells) {
       if (pincer1 == pivot) continue;
-      if (!pivot.haslinkto(pincer1, true)) continue;
+      if (!pivot.has_connection_to(pincer1, true)) continue;
       const auto& pincer1_values = pincer1.value_set();
       set<int> intersect1;
       set_intersection(pivot_values.begin(), pivot_values.end(),
                        pincer1_values.begin(), pincer1_values.end(),
-                       std::inserter(intersect1, intersect1.begin()));
+                       inserter(intersect1, intersect1.begin()));
       if (intersect1.size() != 2) continue;
       for (auto& pincer2 : twocells.cells) {
         if (pincer2 == pivot) continue;
         if (pincer2 == pincer1) continue;
-        if (!pivot.haslinkto(pincer2, true)) continue;
+        if (!pivot.has_connection_to(pincer2, true)) continue;
         const auto& pincer2_values = pincer2.value_set();
         set<int> intersect2;
         set_intersection(pivot_values.begin(), pivot_values.end(),
                        pincer2_values.begin(), pincer2_values.end(),
-                       std::inserter(intersect2, intersect2.begin()));
+                       inserter(intersect2, intersect2.begin()));
         if (intersect2.size() != 2) continue;
         if (intersect2 == intersect1) continue;
-        cout << "XYZWING: test pivot=(" << pivot.r+1 << "," << pivot.c+1 << "),"
-             << "pincer1=(" << pincer1.r+1 << "," << pincer1.c+1 << "),"
-             << "pincer2=(" << pincer2.r+1 << "," << pincer2.c+1 << "))"
-             << endl;
+        // cout << "XYZWING: test pivot=(" << pivot.r+1 << "," << pivot.c+1 << "),"
+        //      << "pincer1=(" << pincer1.r+1 << "," << pincer1.c+1 << "),"
+        //      << "pincer2=(" << pincer2.r+1 << "," << pincer2.c+1 << "))"
+        //      << endl;
         set<int> intersect3;
         set_intersection(pincer1_values.begin(), pincer1_values.end(),
                        pincer2_values.begin(), pincer2_values.end(),
-                       std::inserter(intersect3, intersect3.begin()));
+                       inserter(intersect3, intersect3.begin()));
         assert(intersect3.size() == 1);
         int bad = *intersect3.begin();
         for (int r = 0; r < SIZE; ++r) {
@@ -2529,10 +2596,10 @@ bool tryxyzwing(const Collection& threecells, const Collection& twocells) {
             ccell.c = c;
             if (ccell == pivot || ccell == pincer1 || ccell == pincer2)
               continue;
-            if (ccell.haslinkto(pincer1, true)
-                && ccell.haslinkto(pincer2, true)
-                && ccell.haslinkto(pivot, true)) {
-              std::ostringstream s;
+            if (ccell.has_connection_to(pincer1, true)
+                && ccell.has_connection_to(pincer2, true)
+                && ccell.has_connection_to(pivot, true)) {
+              ostringstream s;
               s << "xyzwing(pivot=" << pivot.r+1 << "," << pivot.c+1
                 << ", pincer1=" << pincer1.r+1 << "," << pincer1.c+1
                 << ", pincer2=" << pincer2.r+1 << "," << pincer2.c+1
@@ -2593,8 +2660,8 @@ bool tryswordfish(const char* name,
   }
   bool retval = false;
   if (rows.size() > 0) {
-    std::ostringstream s;
-    std::string rowname, colname;
+    ostringstream s;
+    string rowname, colname;
     rowf.GetName(&rowname);
     colf.GetName(&colname);
     s << "swordfish(" << candidate << ","
@@ -2838,14 +2905,35 @@ void print_c_struct(const string& filename,
    //  {0,0,7, 0,0,5, 2,0,1}}
                     
 bool readdata(const string& filename, board_t* board) {
-  // oops...not implemented yet.
+  ifstream s(filename);
+  string in_string;
+  while (s && in_string != "name:") {
+    s >> in_string;
+  }
+  s >> in_string;
+  if (!s) return false;
+  title = strdup(in_string.c_str());  // could cause a leak.
+  printf("new title %s\n", title.c_str());
+  while (s && in_string != "data:") {
+    s >> in_string;
+  }
+  for (int row = 0;row < SIZE; ++row) {
+    for (int col = 0;col < SIZE; ++col) {
+      s >> in_string;
+      (*board)[row][col].set_value(stoi(in_string));
+      if (!s) {
+        printf("data file read failed at (%d,%d)\n", row, col);
+        return false;
+      }
+    }
+  }
   return false;
 }
 
 void printdata(const string& filename, const string& title, const board_t& b) {
   ofstream s(filename); 
-  s << "name: \"" << title << "\"" << std::endl;
-  s << "data:" << std::endl;
+  s << "name: \"" << title << "\"" << endl;
+  s << "data:" << endl;
   for (int row = 0;row < SIZE; ++row) {
     for (int col = 0;col < SIZE; ++col) {
       if (col % 3 == 0) {
@@ -2854,9 +2942,9 @@ void printdata(const string& filename, const string& title, const board_t& b) {
       s << " " << b[row][col].get_value();
     }
     if (row%3 == 2) {
-      s << std::endl;
+      s << endl;
     }
-    s << std::endl;
+    s << endl;
   }
 }
 
@@ -2868,7 +2956,7 @@ void printthonky(const string& filename, const board_t& b) {
       s << (char)(v == 0 ? '.' : '0'+v);
     }
   }
-  s << std::endl;
+  s << endl;
 }
 
 bool readthonky(const string& filename, board_t* b) {
@@ -2962,7 +3050,7 @@ int makebasicmoves(int* pMaxmoves) {
     for (int r = 0;r < SIZE;++r) {
       for (int c = 0;c < SIZE; ++c) {
 	if (board[r][c].get_value() > 0) {
-          clear_lists("basic", board, r, c);
+          clear_lists("elimination", board, r, c);
           continue;
         }
         if (int e = eliminate(r, c)) {
@@ -3053,10 +3141,8 @@ void initboarddata(const iboard& b) {
 
 bool solve_board() {
   maybe_log("%s\n", "", title.c_str());
-  // set_lists();
   printboard(0);
   makebasicmoves(&maxmoves);
-  // set_lists();
   printboard("sudokuboard0basic.ps");
   bool changed = true;
   while (changed && !alldone()) {
@@ -3120,7 +3206,7 @@ main(int nargs, char** args) {
   ordered_min_two_masks = new(Ordered_Min_Two_Masks);
   // for (int i = 0; i < ordered_min_two_masks->num_masks(); ++i) {
   //   auto n = ordered_min_two_masks->list_of_masks()[i];
-  //   std::bitset<10> bin(n);
+  //   bitset<10> bin(n);
   //   cout << "mask: " << n << " " <<  bin << endl;
   // }
 
@@ -3132,23 +3218,23 @@ main(int nargs, char** args) {
   int read_thonky = 0;
   int write_c = 0;
   const char *infilename = 0;
-   const char *outfilename = 0;
-   static option long_options[] = {
-     {"rd",     required_argument, &read_data,              1 },
-       {"rt",     required_argument, &read_thonky,            1 },
-         {"pd",     required_argument, &write_data,             1 },
-         {"pt",     required_argument, &write_thonky,           1 },
-         {"b",      no_argument,       0,                       0 },
-         {"p",      no_argument,       &justprint,              1 },
-         {"i",      no_argument,       &interior_possibilities, 1 },
-         {"n",      no_argument,       &nosolve,                1 },
-         {"a",      no_argument,       0,                       0 },
-         {"h",      no_argument,       0,                       0 },
-         {"m",      required_argument, 0,                       0 },
-         {"t",      required_argument, 0,                       0 },
-         {"s",      required_argument, 0,                       0 },
-         {"wc",     required_argument, &write_c,                1 },
-         {0,        0,                 0,                       0 },
+  const char *outfilename = 0;
+  static option long_options[] = {
+    {"rd",     required_argument, &read_data,              1 },
+    {"rt",     required_argument, &read_thonky,            1 },
+    {"wd",     required_argument, &write_data,             1 },
+    {"wt",     required_argument, &write_thonky,           1 },
+    {"b",      no_argument,       0,                       0 },
+    {"p",      no_argument,       &justprint,              1 },
+    {"i",      no_argument,       &interior_possibilities, 1 },
+    {"n",      no_argument,       &nosolve,                1 },
+    {"a",      no_argument,       0,                       0 },
+    {"h",      no_argument,       0,                       0 },
+    {"m",      required_argument, 0,                       0 },
+    {"t",      required_argument, 0,                       0 },
+    {"s",      required_argument, 0,                       0 },
+    {"wc",     required_argument, &write_c,                1 },
+    {0,        0,                 0,                       0 },
   };
   int longind;
   while (int rv = getopt_long_only(nargs, args,
@@ -3160,12 +3246,11 @@ main(int nargs, char** args) {
     case 1: // rt: read_thonky
       infilename = optarg;
       break;
-    case 2: // pd: write_data
-    case 3: // pt: write_thonky
+    case 2: // wd: write_data
+    case 3: // wt: write_thonky
       outfilename = optarg;
       break;
-    case 4: /*b*/  // ",      no_argument,       0,                       0 },
-      // blank board print
+    case 4: // b: blank board print
       for (int i = 0 ; i < SIZE; ++i) {
 	for (int j = 0 ; j < SIZE; ++j) {
 	  board[i][j].set_value(0);
@@ -3180,8 +3265,7 @@ main(int nargs, char** args) {
       break;
     case 7: // n: nosolve
       break;
-    case 8: // a
-      // try to solve all of the puzzles
+    case 8: // a: try to solve all of the puzzles
       putps = false;
       for (auto& myboard : boards) {
         initboarddata(myboard);
@@ -3192,17 +3276,16 @@ main(int nargs, char** args) {
         printboard(0);
       }
       exit(0);
-    case 9: // h
-      // hint mode: don't print the full description of the move.
+    case 9: // h: hint mode: don't print the full description of the move.
       hintmode = CELLONLY;
       break;
     case 10: // m
       maxmoves = atoi(optarg);
       break;
-    case 11: // t
+    case 11: // t: set the title
       title = args[1];
       break;
-    case 12: // s
+    case 12: // s: search for a puzzle name
       searchstr = optarg;
       break;
     case 13: // wc: write_c
@@ -3245,6 +3328,7 @@ main(int nargs, char** args) {
     exit(0);
   }
   if (!nosolve) solve_board();
+  set_lists();
   if (write_data) {
     printdata(outfilename, title, board);
     exit(0);
