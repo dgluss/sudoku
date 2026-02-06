@@ -10,28 +10,54 @@
  u end of boat pointing up
  d end of boat pointing down
  s submarine!
+ x a small mark to indicate something's there but we don't know what
  . we don't know. 
 */
 
-char *board[] = {
-  " |0231150431|",
-  "1|..........|",
+char **board;
+char *iboard[] = {
+  /* " |6050060003|", */
+  /* "1|s.........|", */
+  /* "3|..s..s...u|", */
+  /* "1|.........m|", */
+  /* "4|u.u..u...d|", */
+  /* "3|m.d..m....|", */
+  /* "2|m....d....|", */
+  /* "1|d.........|", */
+  /* "1|..u.......|", */
+  /* "2|..d..u....|", */
+  /* "2|s....d....|", */
+  /* 0, */
+  /* " |6050060003|", */
+  /* "1|..........|", */
+  /* "3|.....s....|", */
+  /* "1|..........|", */
+  /* "4|u.x..u...x|", */
+  /* "3|m....m....|", */
+  /* "2|m....d....|", */
+  /* "1|d.........|", */
+  /* "1|..u.......|", */
+  /* "2|..m..u....|", */
+  /* "2|..d..d....|", */
+  /* 0, */
+  " |1251501032|",
   "3|..........|",
-  "2|..........|",
-  "4|........lr|",
+  "3|....u.....|",
+  "2|....x.....|",
+  "1|...w......|",
+  "1|.w........|",
+  "3|.........u|",
+  "1|.........d|",
+  "5|..........|",
+  "1|..........|",
   "0|..........|",
-  "3|...l......|",
-  "2|..........|",
-  "2|..........|",
-  "2|..........|",
-  "1|.....s....|",
   0,
 };
 
 const char ps_preamble[] =
 R"(%!PS-Adobe
 /Times-Roman findfont 8 scalefont setfont
-54 160 translate
+62 230 translate
 /linespace 50 def
 /numlines 10 def
 /linelen { linespace numlines mul } def
@@ -69,6 +95,16 @@ R"(%!PS-Adobe
  linespace 2 div add
  exch
  linespace 2.5 div 0 360 arc closepath
+ 0 setgray fill
+} def
+/big_x { % c r
+ newpath
+ to_coord % x y
+ linespace 2 div add % x+off y
+ exch % y x+off
+ linespace 2 div add % y+off x+off
+ exch % x+off y+off
+ linespace 6 div 0 360 arc closepath
  0 setgray fill
 } def
 /midship { % c r
@@ -149,6 +185,9 @@ void putpsstr(int r, char *s) {
     case 'm':
       printf("%d %d midship\n", c-1, r);
       break;
+    case 'x':
+      printf("%d %d big_x\n", c-1, r);
+      break;
     case 'r':
       printf("0 %d %d endpart\n", c-1, r);
       break;
@@ -168,7 +207,25 @@ void putpsstr(int r, char *s) {
   }
 }
 
-void fill_in_water() {
+void makewater(int r, int c) {
+  if (r < 1 || c < 2 || !board[r] || board[r][c] == '|')
+    return;
+  board[r][c] = 'w';
+}
+
+// The eight cells around r and c except for one
+void makewater_ring(int r, int c, int dr, int dc) {
+  int wr, wc;
+  for (wr = -1; wr <= 1; ++wr) {
+    for (wc = -1; wc <= 1; ++wc) {
+      if (wr == 0 && wc == 0) continue;
+      if (wr == dr && wc == dc) continue;
+      makewater(r+wr, c+wc);
+    }
+  }
+}
+
+void fill_in_counts_and_water() {
   int w = strlen(board[0]);
   int colcount[w];
   for (int c = 2;c < w;++c) {
@@ -179,24 +236,53 @@ void fill_in_water() {
     }
   }
   for (int r = 1; board[r]; ++r) {
-    board[r] = strdup(board[r]); // make writable
     int rowcount = 0;
     for (int c = 2;board[0][c] && board[0][c] != '|'; ++c) {
       if (board[r][c] != '.' && board[r][c] != 'w')
 	++rowcount;
     }
+    // turn unknowns into water if rowcount or colcount is already
+    // satisfied.
     for (int c = 2;board[0][c]; ++c) {
       if ((board[r][0] - '0' <= rowcount ||
 	   board[0][c] - '0' <= colcount[c]) &&
-	  board[r][c] == '.')
+	  board[r][c] == '.') {
 	board[r][c] = 'w';
+      }
+      // put water around known boat parts
+      switch (board[r][c]) {
+        // l end of boat pointing left
+      case 'l':
+        makewater_ring(r, c, 0, 1);
+        break;
+      // r end of boat pointing right
+      case 'r':
+        makewater_ring(r, c, 0, -1);
+        break;
+      // u end of boat pointing up
+      case 'u':
+        makewater_ring(r, c, 1, 0);
+        break;
+      // d end of boat pointing down
+      case 'd':
+        makewater_ring(r, c, -1, 0);
+        break;
+      // s submarine!
+      case 's':
+        makewater_ring(r, c, 0, 0);
+        break;
+      }
     }
   }
 }
 
 int main() {
   fputs(ps_preamble, stdout);
-  fill_in_water();
+  board = malloc(sizeof(iboard));
+  for (int r = 0; r < sizeof(iboard)/sizeof(iboard[0]); ++r) {
+    board[r] = iboard[r]?strdup(iboard[r]):0; // make the board writable
+  }
+  fill_in_counts_and_water();
   for (int i = 2; board[0][i] && board[0][i] != '|'; ++i) {
     printf("%d 0 (%c) bigstring\n", i-1, board[0][i]);
   }
@@ -206,8 +292,15 @@ int main() {
   }
   printf("%% end of board\n");
   printf("1 11 to_coord translate\n");
-  printf(".35 .35 scale\n");
-  putpsstr(10, " lmmr lmr lmr lr lr lr s s s s");
+  int littleboats = 1;
+  if (littleboats) {
+    printf(".35 .35 scale\n");
+    putpsstr(11, "|lmmr lmr lmr lr lr lr s s s s|");
+  } else {
+    putpsstr(11, "|lmmr lmr lr|");
+    putpsstr(12, "|lmr lr lr|");
+    putpsstr(13, "|s s s s|");
+  }
   printf("showpage\n");
   exit(0);
 }

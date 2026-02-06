@@ -1578,6 +1578,45 @@ iboard boards[] = {
     {0,6,8, 3,2,1, 7,0,5},
     {3,5,0, 4,7,6, 0,0,8},
     {0,0,0, 8,5,9, 0,0,0}}
+  },{"161 fiendish",
+   (int[SIZE][SIZE])
+   {{0,0,0, 0,0,0, 9,8,0},
+    {0,7,0, 0,0,0, 0,1,0},
+    {0,0,5, 0,4,3, 0,0,2},
+
+    {0,0,0, 7,0,0, 5,0,9},
+    {0,0,0, 9,0,1, 0,0,0},
+    {8,0,4, 0,0,5, 0,0,0},
+
+    {7,0,0, 3,5,0, 6,0,0},
+    {0,6,0, 0,0,0, 0,7,0},
+    {0,8,3, 0,0,0, 0,0,0}}
+  },{"145 fiendish",
+   (int[SIZE][SIZE])
+   {{0,0,0, 3,0,0, 0,0,0},
+    {0,2,0, 0,0,9, 5,0,3},
+    {9,3,1, 8,0,5, 0,7,4},
+
+    {1,8,7, 2,4,3, 0,0,0},
+    {3,9,2, 0,0,8, 1,4,7},
+    {0,0,0, 7,9,1, 0,0,8},
+
+    {4,7,6, 0,0,2, 0,0,9},
+    {8,0,3, 9,0,0, 0,6,2},
+    {2,0,9, 0,0,6, 0,0,0}}
+  },{"144 tough",
+   (int[SIZE][SIZE])
+   {{0,0,0, 6,0,2, 0,7,0},
+    {0,2,0, 0,9,0, 6,0,8},
+    {0,6,3, 0,8,7, 9,0,2},
+
+    {2,0,0, 0,0,0, 0,6,0},
+    {0,0,6, 7,5,4, 2,0,0},
+    {0,1,0, 2,0,0, 0,0,9},
+
+    {6,0,1, 3,7,0, 4,2,5},
+    {4,0,0, 0,2,0, 0,8,0},
+    {0,5,2, 0,0,1, 0,0,0}}
   }};
               
 //iboard boards[] = {
@@ -2263,7 +2302,7 @@ bool trynakedcells(GetCollection& g) {
   Collection col;
   for (int r = 0; r < SIZE; ++r) {
     g.New(r, &col);
-    // print_collection(col, "col: ");
+    // print_collection(col, "collection: ");
     for (int i = 0; i < ordered_min_two_masks->num_masks();++i) {
       Collection mycol;
       if (!col.Mask(ordered_min_two_masks->get_masks()[i], &mycol)) {
@@ -3292,18 +3331,6 @@ main(int nargs, char** args) {
       outfilename = optarg;
     }
   }
-  // printf("\n\nnosolve = %d\n", nosolve);
-  // printf("justprint = %d\n", justprint);
-  // printf("write_data = %d\n", write_data);
-  // printf("read_data = %d\n", read_data);
-  // printf("write_thonky = %d\n", write_thonky);
-  // printf("read_thonky = %d\n", read_thonky);
-  // printf("interior_possibilities = %d\n", interior_possibilities);
-  // printf("maxmoves = %d\n", maxmoves);
-  // if (infilename)
-  //   printf("infilename = %s\n", infilename);
-  // if (outfilename)
-  //   printf("outfilename = %s\n", outfilename);
   if (searchstr && searchstr[0]) {
     regex_t regbuf;
     regcomp(&regbuf, searchstr, 0);
@@ -3323,12 +3350,11 @@ main(int nargs, char** args) {
     readthonky(infilename, &board);
   }
   if (justprint) {
-    // set_lists();
     printboard("sudokuboard.ps");
     exit(0);
   }
-  if (!nosolve) solve_board();
   set_lists();
+  if (!nosolve) solve_board();
   if (write_data) {
     printdata(outfilename, title, board);
     exit(0);
