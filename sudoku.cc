@@ -107,11 +107,11 @@ struct cellvalue {
 
 struct link {
   cellvalue from, to;
-  enum {STRONG, WEAK} s;
-  bool otherside(cellvalue& from, cellvalue* to);
+  enum {STRONG, WEAK} strength;
+  bool otherside(const cellvalue& from, cellvalue* to);
 };
 
-bool link::otherside(cellvalue& from, cellvalue* to) {
+bool link::otherside(const cellvalue& from, cellvalue* to) {
   if (from == this->from) {
     *to = this->to;
     return true;
@@ -126,10 +126,12 @@ bool link::otherside(cellvalue& from, cellvalue* to) {
 // A cell may have a value. The value_set is the set of currently
 // known possible values. The mask is a binary mask of the value_set.
 struct cell {
+  int value;
   set<int> value_set;
   int mask;
 
   cell() {
+    value = 0;
     // The default value_set is all possibilities
     for (int v = 1; v <= SIZE; ++v) {
       value_set.insert(v);
@@ -1742,7 +1744,7 @@ void clear_lists(const string& name, board_t& board, int row, int col) {
       if (n > 1 && board[r][c].value_set.size() == 1) {
         char buf[20];
         sprintf(buf, "{%d,%d}", r+1, c+1);
-        maybe_log("found %d in {%d,%d} by %s\n",
+        maybe_log("found %d in {%d,%d} by clear_lists(%s)\n",
                   buf,
                   board[r][c].get_value(),
                   r+1, c+1,
@@ -2764,7 +2766,9 @@ bool blockhas(int cand, int a, int b) {
 
 const char postscript_preamble[] =
 R"(%!PS-Adobe
-/Times-Roman findfont 8 scalefont setfont
+/smallstringsize 14 def
+/interior_digit_size 16 def
+/bigstringsize 32 def
 54 160 translate
 /linespace 56 def
 /numlines 9 def
@@ -2779,7 +2783,7 @@ R"(%!PS-Adobe
 % bigstring centers the string in the box
 /bigstring { % i j string
  /fsize 32 def
- /Times-Roman findfont fsize scalefont setfont
+ /Times-Roman findfont bigstringsize scalefont setfont
  3 1 roll % string i j
  to_coord 3 -1 roll % x y string
  dup % x y string string
@@ -2795,7 +2799,7 @@ R"(%!PS-Adobe
 } def
 % smallstring goes at the top left
 /smallstring { % i j string
- /Times-Roman findfont 14 scalefont setfont
+ /Times-Roman findfont smallstringsize scalefont setfont
  3 1 roll % string x y
  to_coord
  moveto % string
@@ -2804,7 +2808,7 @@ R"(%!PS-Adobe
 } def
 % digit is printed in a position in a 3x3 array in the cell
 % dig is an int, not a string.
-/digit { % col row dig
+/interior_digit { % col row dig
  3 1 roll to_coord
  3 -1 roll % cellcol cellrow dig
  dup 2 string cvs % cellcol cellrow dig (dig)
@@ -2814,7 +2818,7 @@ R"(%!PS-Adobe
  3 -1 roll add % (dig) cellcol xspace yloc
  3 1 roll add exch % (dig) xloc yloc
  gsave
- /Times-Roman findfont 16 scalefont setfont
+ /Times-Roman findfont interior_digit_size scalefont setfont
  .5 setgray
  moveto show
  grestore
@@ -2875,7 +2879,7 @@ void printboard(const char* filename) {
           if (board[r][c].value_set.size() < SIZE-1) {
             if (interior_possibilities) {
               for (auto d : board[r][c].value_set) {
-                fprintf(f, "%d %d %d digit\n",
+                fprintf(f, "%d %d %d interior_digit\n",
                         c+1, r+1, d);
               }            
             } else {
