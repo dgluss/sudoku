@@ -15,7 +15,7 @@
 */
 
 char **board;
-char *iboard[] = {
+const char *iboard[] = {
   /* " |6050060003|", */
   /* "1|s.........|", */
   /* "3|..s..s...u|", */
@@ -43,11 +43,11 @@ char *iboard[] = {
   " |1251501032|",
   "3|..........|",
   "3|....u.....|",
-  "2|....x.....|",
-  "1|...w......|",
+  "2|..........|",
+  "1|..........|",
   "1|.w........|",
   "3|.........u|",
-  "1|.........d|",
+  "1|..........|",
   "5|..........|",
   "1|..........|",
   "0|..........|",
@@ -176,7 +176,7 @@ heavyspace 0 gt
 } if
 )";
 
-void putpsstr(int r, char *s) {
+void putpsstr(int r, const char *s) {
   for (int c = 1; s[c]; ++c) {
     switch(s[c]) {
     case 's':
@@ -275,10 +275,106 @@ void fill_in_counts_and_water() {
     }
   }
 }
+const constexpr int BOARDSIZE = 10;
+struct boat {
+  int length;
+  int x, y; // the x and y of lower left
+  enum ORIENT { VERT, HORIZ } orient;
+  boat(int len) {
+    length = len;
+    initpos();
+  }
+  void initpos() {
+    init_x();
+    init_y();
+    y = 1;
+    orient = VERT;
+  }
+  void init_x() {
+    x = 2;
+  }
+  void init_y() {
+    y = 1;
+  }
+  boat* nextboat() {
+    boat* rv = this + 1;
+    return rv;
+  }
+
+  bool solve();
+  
+  void putboat(FILE* f) {
+    fprintf(f, "boat l=%d x=%d y=%d %c\n",
+            length, x, y, orient == VERT ? 'v' : 'h');
+  }
+  bool incr() {
+    if (orient == VERT) {
+      orient = HORIZ;
+      return true;
+    }
+    orient = VERT;
+    if (x < BOARDSIZE+1) {
+      ++x;
+      return true;
+    }
+    init_x();
+    if (y < BOARDSIZE) {
+      ++y;
+      return true;
+    }
+    return false;
+  }
+  bool does_it_fit();
+};
+
+bool boat::does_it_fit() {
+  char zeromatch='s';
+  char maxmatch='s';
+  if (length > 1) {
+    switch (orient) {
+    case VERT:
+      zeromatch='d';
+      maxmatch='u';
+      break;
+    case HORIZ:
+      zeromatch='l';
+      maxmatch='r';
+      break;
+    }
+  }
+  for (int i = 0; i < length; ++i) {
+    for (int ov = -1; ov <= 1; ++ov) {
+      for (int oh = -1; oh <= 1; ++oh) {
+        if (ov == 0 && oh == 0);
+      }
+    }
+  }
+  return true;
+}
+
+bool boat::solve() {
+  if (length == 0)
+    return true;
+  return false;
+}
+
+boat boats[] = {
+  boat(4),
+  boat(3),
+  boat(3),
+  boat(2),
+  boat(2),
+  boat(2),
+  boat(1),
+  boat(1),
+  boat(1),
+  boat(1),
+  boat(0),
+};
 
 int main() {
   fputs(ps_preamble, stdout);
-  board = malloc(sizeof(iboard));
+  board = (char**)malloc(sizeof(iboard));
   for (int r = 0; r < sizeof(iboard)/sizeof(iboard[0]); ++r) {
     board[r] = iboard[r]?strdup(iboard[r]):0; // make the board writable
   }
@@ -291,16 +387,25 @@ int main() {
     putpsstr(r, board[r]);
   }
   printf("%% end of board\n");
-  printf("1 11 to_coord translate\n");
-  int littleboats = 1;
-  if (littleboats) {
-    printf(".35 .35 scale\n");
-    putpsstr(11, "|lmmr lmr lmr lr lr lr s s s s|");
-  } else {
-    putpsstr(11, "|lmmr lmr lr|");
-    putpsstr(12, "|lmr lr lr|");
-    putpsstr(13, "|s s s s|");
-  }
+  printf("gsave 1 10.5 to_coord translate\n");
+  printf(".35 .35 scale\n");
+  putpsstr(11, "|lmmr lmr lmr lr lr lr s s s s|");
+  printf("grestore\n");
+
+  putpsstr(13, "|lmmrlmrlmr|");
+  putpsstr(14, "|lrlrlrssss|");
+
   printf("showpage\n");
+  // fprintf(stderr, "ALL BOATS\n");
+  // for (boat* b = boats; b->length; b = b->nextboat()) {
+  //   b->putboat(stderr);
+  // }
+  // fprintf(stderr, "INCR BOATS[0]\n");
+  // while (true) {
+  //   boats[0].putboat(stderr);
+  //   if (!boats[0].incr())
+  //     break;
+  // }
   exit(0);
 }
+

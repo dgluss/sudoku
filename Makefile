@@ -1,11 +1,13 @@
+want:	foo.ps
+
 sudokuboard.ps: sudoku Makefile
 	./sudoku # -s "thonkyveryhard"
 
 sudoku:	sudoku.cc
 	g++ -g $< -o $@
 
-battleship: battleship.c
-	gcc -g $< -o $@
+battleship: battleship.cc
+	g++ -g $< -o $@
 
 foo.ps: battleship
 	./battleship > $@
