@@ -279,7 +279,7 @@ const constexpr int BOARDSIZE = 10;
 struct boat {
   int length;
   int x, y; // the x and y of lower left
-  enum ORIENT { VERT, HORIZ } orient;
+  enum ORIENT { VERT, HORIZ, SUB } orient;
   boat(int len) {
     length = len;
     initpos();
@@ -288,7 +288,11 @@ struct boat {
     init_x();
     init_y();
     y = 1;
-    orient = VERT;
+    if (length > 1) {
+      orient = VERT;
+    } else {
+      orient = SUB;
+    }
   }
   void init_x() {
     x = 2;
@@ -305,14 +309,17 @@ struct boat {
   
   void putboat(FILE* f) {
     fprintf(f, "boat l=%d x=%d y=%d %c\n",
-            length, x, y, orient == VERT ? 'v' : 'h');
+            length, x, y,
+            orient == SUB ? 's' : orient == VERT ? 'v' : 'h');
   }
   bool incr() {
     if (orient == VERT) {
       orient = HORIZ;
       return true;
     }
-    orient = VERT;
+    if (orient != SUB) {
+      orient = VERT;
+    }
     if (x < BOARDSIZE+1) {
       ++x;
       return true;
@@ -324,10 +331,11 @@ struct boat {
     }
     return false;
   }
-  bool does_it_fit();
+  bool it_fits();
 };
 
-bool boat::does_it_fit() {
+bool boat::it_fits() {
+  // what should either end of the boat look like
   char zeromatch='s';
   char maxmatch='s';
   if (length > 1) {
@@ -345,7 +353,17 @@ bool boat::does_it_fit() {
   for (int i = 0; i < length; ++i) {
     for (int ov = -1; ov <= 1; ++ov) {
       for (int oh = -1; oh <= 1; ++oh) {
-        if (ov == 0 && oh == 0);
+        if (ov == 0 && oh == 0) {
+          // Looking at the boat
+          char boat_match = zeromatch;
+          if (i > 0) {
+            boat_match = 'm';
+          }
+          if (i >= length - 1) {
+            boat_match = maxmatch;
+          }
+          //          if (board[foofoo
+        }
       }
     }
   }
@@ -396,16 +414,20 @@ int main() {
   putpsstr(14, "|lrlrlrssss|");
 
   printf("showpage\n");
+
+  // TESTS
   // fprintf(stderr, "ALL BOATS\n");
   // for (boat* b = boats; b->length; b = b->nextboat()) {
   //   b->putboat(stderr);
   // }
-  // fprintf(stderr, "INCR BOATS[0]\n");
+  // const constexpr int SHOWBOAT = 6;
+  // fprintf(stderr, "INCR BOATS[SHOWBOAT]\n");
   // while (true) {
-  //   boats[0].putboat(stderr);
-  //   if (!boats[0].incr())
+  //   boats[SHOWBOAT].putboat(stderr);
+  //   if (!boats[SHOWBOAT].incr())
   //     break;
   // }
+
   exit(0);
 }
 
