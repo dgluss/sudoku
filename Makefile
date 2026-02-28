@@ -1,4 +1,4 @@
-want:	foo.ps
+want:	sudokuboard.ps
 
 sudokuboard.ps: sudoku Makefile
 	./sudoku # -s "thonkyveryhard"
