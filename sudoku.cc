@@ -1632,6 +1632,45 @@ iboard boards[] = {
     {0,0,0, 0,3,0, 0,4,0},
     {6,0,0, 0,0,5, 0,7,8},
     {0,0,0, 0,0,0, 1,5,0}}
+  },{"395 ****",
+   (int[SIZE][SIZE])
+   {{0,0,3, 6,0,0, 0,8,7},
+    {5,0,0, 0,0,4, 1,6,0},
+    {6,0,8, 0,0,0, 0,0,0},
+
+    {1,5,7, 2,4,0, 6,9,0},
+    {8,0,4, 0,0,0, 7,0,1},
+    {0,9,0, 0,0,1, 0,4,0},
+
+    {0,0,5, 0,0,0, 9,7,4},
+    {0,0,1, 3,0,0, 8,5,6},
+    {7,8,0, 4,0,5, 3,1,2}}
+  },{"396 ****",
+   (int[SIZE][SIZE])
+   {{0,0,3, 0,0,0, 0,0,8},
+    {8,0,0, 1,0,0, 4,0,6},
+    {2,0,6, 8,7,0, 0,0,0},
+
+    {0,0,4, 9,8,5, 0,0,3},
+    {0,2,8, 0,1,0, 0,4,5},
+    {5,0,0, 4,0,2, 8,0,0},
+
+    {0,0,0, 0,9,8, 5,0,2},
+    {0,0,2, 0,4,1, 0,0,7},
+    {0,0,0, 0,0,0, 3,0,4}}
+  },{"548 ****",
+   (int[SIZE][SIZE])
+   {{0,3,0, 0,7,0, 0,0,0},
+    {0,7,1, 8,0,0, 0,0,6},
+    {5,0,0, 4,0,0, 0,3,1},
+
+    {0,0,0, 6,0,0, 0,4,9},
+    {0,0,3, 0,0,0, 6,0,0},
+    {2,9,0, 0,0,5, 0,0,0},
+
+    {1,2,0, 0,0,7, 0,0,4},
+    {3,0,0, 0,0,4, 9,2,0},
+    {0,0,0, 0,2,0, 0,8,0}}
   }};
               
 //iboard boards[] = {
@@ -2309,8 +2348,8 @@ bool mayberemove(const string& name, const string& stepname,
 // then no other cells in the collection can have those values.
 // This is actually true of subsets too, so 123, 12, 12 must work:
 // the latter two are 1 and 2 so the first one must be 3, thus all other
-// lists couldn't have 1 or 2 or 3. Also, 12, 23, 13, which currently
-// doesn't work.
+// lists couldn't have 1 or 2 or 3. Also, 12, 23, 13, which didn't work
+// but now it does.
 // Side effect: sets the value for cells that now have list size 1.
 bool trynakedcells(GetCollection& g) {
   bool retval = false;
@@ -2320,6 +2359,7 @@ bool trynakedcells(GetCollection& g) {
     // print_collection(col, "collection: ");
     for (int i = 0; i < ordered_min_two_masks->num_masks();++i) {
       Collection mycol;
+      mycol.name = "nakedcells";
       if (!col.Mask(ordered_min_two_masks->get_masks()[i], &mycol)) {
         continue;
       }
@@ -2328,9 +2368,16 @@ bool trynakedcells(GetCollection& g) {
       col.Subtract(mycol, &othercells);
       // print_collection(othercells, "othercells: ");
       ostringstream s;
-      s << "nakedcells from: " << mycol.locs();
+      s << "nakedcells from: " << mycol.locs() << " [";
       set<int> values;
       mycol.GetValues(&values);
+      // we know there's at least one
+      auto ip = values.begin();
+      s << *ip;
+      for (++ip; ip != values.end(); ++ip) {
+        s << "," << *ip;
+      }
+      s << "]";
       if (values.size() > mycol.cells.size())
         continue;
       for (auto& mycell : othercells.cells) {
@@ -3247,7 +3294,7 @@ bool solve_board() {
 }
 
 int
-main(int nargs, char** args) {
+main(int nargs, char* const* args) {
   auto& myboard = boards[sizeof(boards)/sizeof(iboard) - 1];
   initboarddata(myboard);
   GetCollection g(GetCollection::ARBITRARY);;
